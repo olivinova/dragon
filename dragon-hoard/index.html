@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dragon Hoard</title>
+    <link rel="stylesheet" href="static/style.css" />
+    <link data-trunk rel="copy-dir" href="static" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import init from './pkg/dragon_hoard.js';
+      init().catch(console.error);
+    </script>
+  </body>
+</html>

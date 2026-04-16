@@ -1,5 +1,5 @@
 use crate::game::GameState;
-use crate::ui::{ActionButton, Panel};
+use crate::ui::{ActionButton, ICON_GOLD, ICON_MANA, NumberFormat, Panel, labeled_cost, paired_cost};
 use yew::prelude::*;
 
 /// Adventure tab UI block.
@@ -8,6 +8,7 @@ use yew::prelude::*;
 #[derive(Properties, PartialEq)]
 pub struct AdventureTabProps {
     pub game: GameState,
+    pub number_style: NumberFormat,
     pub on_conquer_town: Callback<usize>,
     pub on_explore_dungeon: Callback<usize>,
 }
@@ -26,7 +27,7 @@ pub fn adventure_tab(props: &AdventureTabProps) -> Html {
                     let label = if t.conquered {
                         "Owned".to_string()
                     } else {
-                        format!("Conquer (cost {:.0})", town_cost)
+                        format!("Conquer (cost {})", labeled_cost(ICON_GOLD, town_cost, props.number_style))
                     };
 
                     html! {
@@ -40,6 +41,7 @@ pub fn adventure_tab(props: &AdventureTabProps) -> Html {
                                 label={label}
                                 onclick={Callback::from(move |_| cb.emit(i))}
                                 disabled={t.conquered || g.gold < town_cost}
+                                title={"Conquer this town for gold rewards and new passive income.".to_string()}
                             />
                         </div>
                     }
@@ -54,7 +56,7 @@ pub fn adventure_tab(props: &AdventureTabProps) -> Html {
                     let label = if d.cleared {
                         "Cleared".to_string()
                     } else {
-                        format!("Explore ({:.0}g/{:.0}m)", gold_cost, mana_req)
+                        format!("Explore ({})", paired_cost(gold_cost, mana_req, props.number_style))
                     };
 
                     html! {
@@ -68,6 +70,7 @@ pub fn adventure_tab(props: &AdventureTabProps) -> Html {
                                 label={label}
                                 onclick={Callback::from(move |_| cb.emit(i))}
                                 disabled={d.cleared || g.gold < gold_cost || g.mana < mana_req}
+                                title={"Explore the dungeon to earn gold and mana rewards if you meet the cost.".to_string()}
                             />
                         </div>
                     }

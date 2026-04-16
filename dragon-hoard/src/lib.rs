@@ -1,5 +1,6 @@
 mod adventure_tab;
 mod app;
+mod action_helpers;
 mod enchantments_tab;
 mod game;
 mod hoard_tab;

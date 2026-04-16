@@ -1,5 +1,5 @@
 use crate::game::GameState;
-use crate::ui::{ActionButton, BuyRow, Panel};
+use crate::ui::{ActionButton, BuyRow, ICON_GOLD, ICON_MANA, NumberFormat, Panel, labeled_cost, paired_cost};
 use yew::prelude::*;
 
 /// Enchantments tab UI block.
@@ -8,6 +8,7 @@ use yew::prelude::*;
 #[derive(Properties, PartialEq)]
 pub struct EnchantmentsTabProps {
     pub game: GameState,
+    pub number_style: NumberFormat,
     pub on_learn_magic: Callback<MouseEvent>,
     pub on_craft_enchant: Callback<MouseEvent>,
     pub on_sell_enchant: Callback<usize>,
@@ -24,17 +25,19 @@ pub fn enchantments_tab(props: &EnchantmentsTabProps) -> Html {
             <h2 class="section-title">{"Enchantments"}</h2>
             <BuyRow>
                 <ActionButton
-                    label={format!("Study Magic (cost {:.0})", magic_cost)}
+                    label={format!("Study Magic (cost {})", labeled_cost(ICON_GOLD, magic_cost, props.number_style))}
                     onclick={props.on_learn_magic.clone()}
                     disabled={g.gold < magic_cost}
+                    title={"Increase magic level to unlock extra mana and enchantment power.".to_string()}
                 />
                 <div class="muted">{ format!("Magic Level: {}", g.magic_level) }</div>
             </BuyRow>
             <BuyRow>
                 <ActionButton
-                    label={format!("Forging Enchantment ({:.0}g / {:.0}m)", enchant_cost.0, enchant_cost.1)}
+                    label={format!("Forging Enchantment ({})", paired_cost(enchant_cost.0, enchant_cost.1, props.number_style))}
                     onclick={props.on_craft_enchant.clone()}
                     disabled={g.gold < enchant_cost.0 || g.mana < enchant_cost.1}
+                    title={"Spend gold and mana to craft a new enchantment with passive benefits.".to_string()}
                 />
                 <div class="muted">{"Use mana and gold to craft rarer items."}</div>
             </BuyRow>
@@ -49,7 +52,7 @@ pub fn enchantments_tab(props: &EnchantmentsTabProps) -> Html {
                             </div>
                             <div class="enchant-meta">{ format!("{} — value {:.0}", e.kind, e.value) }</div>
                             <div class="muted">{ &e.effect }</div>
-                            <button onclick={Callback::from(move |_| sell_cb.emit(i))}>{"Sell"}</button>
+                            <button onclick={Callback::from(move |_| sell_cb.emit(i))} title={"Sell this enchantment for a partial gold refund.".to_string()}>{"Sell"}</button>
                         </div>
                     }
                 }) }

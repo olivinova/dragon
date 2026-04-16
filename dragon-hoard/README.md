@@ -53,11 +53,10 @@ The resource sidebar is intentionally separated from the tab panel so more categ
 
 ## TODO / future improvements
 
-- Add collapsible resource categories to the sidebar.
-- Add item tooltips and hover explanations in the tab panels.
-- Extract callback factories into a smaller helper module.
-- Add save export/import and manual reset confirmation.
-- Add audio feedback and visual polish for resource changes.
+Implement magic research system to allow for specialization and character building.
+Change enchantments to provide bonuses outside of 'combat strength'.
+Create a system that allows for conquering more towns and that giving you a larger cap for total space allowed.
+
 
 ## Troubleshooting & common installation steps (Windows / PowerShell)
 

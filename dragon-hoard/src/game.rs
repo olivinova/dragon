@@ -2,13 +2,20 @@ use gloo_storage::{LocalStorage, Storage};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
 pub struct GameState {
     pub gold: f64,
     pub gold_per_sec: f64,
     pub kobolds: u32,
     pub food: f64,
-    pub housing: u32,
-    pub housing_progress: f64,
+    #[serde(alias = "housing")]
+    pub space: u32,
+    #[serde(alias = "housing_progress")]
+    pub space_progress: f64,
+    pub housing_slots: u32,
+    pub storage_slots: u32,
+    pub furniture_slots: u32,
+    pub gold_capacity: f64,
     pub assigned_mining: u32,
     pub assigned_farming: u32,
     pub assigned_digging: u32,
@@ -33,8 +40,12 @@ impl Default for GameState {
             gold_per_sec: 0.0,
             kobolds: 0,
             food: 20.0,
-            housing: 5,
-            housing_progress: 0.0,
+            space: 5,
+            space_progress: 0.0,
+            housing_slots: 0,
+            storage_slots: 5,
+            furniture_slots: 0,
+            gold_capacity: 1000.0,
             assigned_mining: 0,
             assigned_farming: 0,
             assigned_digging: 0,
@@ -138,8 +149,8 @@ pub enum GameTrack {
     Mana,
     ManaCapacity,
     ManaRegenPerSec,
-    Housing,
-    HousingProgress,
+    Space,
+    SpaceProgress,
     Kobolds,
     AssignedMining,
     AssignedFarming,
@@ -207,11 +218,16 @@ impl GameState {
         if self.food > 99999.0 {
             self.food = 99999.0;
         }
-        self.housing_progress +=
+        self.space_progress +=
             self.assigned_digging as f64 * 0.04 * self.kobold_efficiency * dt_seconds;
-        while self.housing_progress >= 1.0 {
-            self.housing += 1;
-            self.housing_progress -= 1.0;
+        while self.space_progress >= 1.0 {
+            self.space += 1;
+            self.space_progress -= 1.0;
+            self.storage_slots += 1;
+            self.update_gold_capacity();
+        }
+        if self.gold > self.gold_capacity {
+            self.gold = self.gold_capacity;
         }
         // mana regeneration
         if self.mana < self.mana_capacity {
@@ -232,7 +248,7 @@ impl GameState {
 
     pub fn recruit_kobold(&mut self) -> bool {
         let cost = self.kobold_cost();
-        if self.gold >= cost && self.food >= 5.0 && self.kobolds < self.housing {
+        if self.gold >= cost && self.food >= 5.0 && self.kobolds < self.housing_slots {
             self.subtract_track(GameTrack::Gold, cost);
             self.subtract_track(GameTrack::Food, 5.0);
             self.add_track(GameTrack::Kobolds, 1.0);
@@ -245,6 +261,66 @@ impl GameState {
     pub fn free_kobolds(&self) -> u32 {
         self.kobolds
             .saturating_sub(self.assigned_mining + self.assigned_farming + self.assigned_digging)
+    }
+
+    pub fn total_allocated_space(&self) -> u32 {
+        self.housing_slots + self.storage_slots + self.furniture_slots
+    }
+
+    #[allow(dead_code)]
+    pub fn available_space(&self) -> u32 {
+        self.space.saturating_sub(self.total_allocated_space())
+    }
+
+    pub fn update_gold_capacity(&mut self) {
+        self.gold_capacity = (self.storage_slots as f64) * 200.0;
+        if self.gold > self.gold_capacity {
+            self.gold = self.gold_capacity;
+        }
+    }
+
+    pub fn designate_storage_to_housing(&mut self) -> bool {
+        if self.storage_slots > 0 {
+            self.storage_slots -= 1;
+            self.housing_slots += 1;
+            self.update_gold_capacity();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn reclaim_housing_to_storage(&mut self) -> bool {
+        if self.housing_slots > 0 {
+            self.housing_slots -= 1;
+            self.storage_slots += 1;
+            self.update_gold_capacity();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn designate_storage_to_furniture(&mut self) -> bool {
+        if self.storage_slots > 0 {
+            self.storage_slots -= 1;
+            self.furniture_slots += 1;
+            self.update_gold_capacity();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn reclaim_furniture_to_storage(&mut self) -> bool {
+        if self.furniture_slots > 0 {
+            self.furniture_slots -= 1;
+            self.storage_slots += 1;
+            self.update_gold_capacity();
+            true
+        } else {
+            false
+        }
     }
 
     pub fn assign_mining(&mut self) -> bool {
@@ -380,7 +456,7 @@ impl GameState {
             GameTrack::Gold => GameTrackStats::new(
                 Some(self.gold),
                 Some(self.gold_per_sec),
-                None,
+                Some(self.gold_capacity),
                 None,
             ),
             GameTrack::GoldPerSec => GameTrackStats::new(Some(self.gold_per_sec), None, None, None),
@@ -393,12 +469,12 @@ impl GameState {
             ),
             GameTrack::ManaCapacity => GameTrackStats::new(Some(self.mana_capacity), None, None, None),
             GameTrack::ManaRegenPerSec => GameTrackStats::new(Some(self.mana_regen_per_sec), None, None, None),
-            GameTrack::Housing => GameTrackStats::new(Some(self.housing as f64), None, None, None),
-            GameTrack::HousingProgress => GameTrackStats::new(Some(self.housing_progress), None, None, None),
+            GameTrack::Space => GameTrackStats::new(Some(self.space as f64), None, None, None),
+            GameTrack::SpaceProgress => GameTrackStats::new(Some(self.space_progress), None, None, None),
             GameTrack::Kobolds => GameTrackStats::new(
                 Some(self.kobolds as f64),
                 None,
-                Some(self.housing as f64),
+                Some(self.housing_slots as f64),
                 Some(self.kobold_efficiency),
             ),
             GameTrack::AssignedMining => GameTrackStats::new(
@@ -444,6 +520,9 @@ impl GameState {
         match track {
             GameTrack::Gold => {
                 self.gold = (self.gold + delta).max(0.0);
+                if self.gold > self.gold_capacity {
+                    self.gold = self.gold_capacity;
+                }
             }
             GameTrack::GoldPerSec => {
                 self.gold_per_sec = (self.gold_per_sec + delta).max(0.0);
@@ -469,15 +548,15 @@ impl GameState {
             GameTrack::ManaRegenPerSec => {
                 self.mana_regen_per_sec = (self.mana_regen_per_sec + delta).max(0.0);
             }
-            GameTrack::Housing => {
+            GameTrack::Space => {
                 if delta >= 0.0 {
-                    self.housing = self.housing.saturating_add(delta.round() as u32);
+                    self.space = self.space.saturating_add(delta.round() as u32);
                 } else {
-                    self.housing = self.housing.saturating_sub(delta.abs().round() as u32);
+                    self.space = self.space.saturating_sub(delta.abs().round() as u32);
                 }
             }
-            GameTrack::HousingProgress => {
-                self.housing_progress = (self.housing_progress + delta).max(0.0);
+            GameTrack::SpaceProgress => {
+                self.space_progress = (self.space_progress + delta).max(0.0);
             }
             GameTrack::Kobolds => {
                 if delta >= 0.0 {
@@ -553,8 +632,8 @@ impl GameState {
                 }
             }
             GameTrack::ManaRegenPerSec => self.mana_regen_per_sec = value.max(0.0),
-            GameTrack::Housing => self.housing = value.max(0.0).round() as u32,
-            GameTrack::HousingProgress => self.housing_progress = value.max(0.0),
+            GameTrack::Space => self.space = value.max(0.0).round() as u32,
+            GameTrack::SpaceProgress => self.space_progress = value.max(0.0),
             GameTrack::Kobolds => self.kobolds = value.max(0.0).round() as u32,
             GameTrack::AssignedMining => self.assigned_mining = value.max(0.0).round() as u32,
             GameTrack::AssignedFarming => self.assigned_farming = value.max(0.0).round() as u32,

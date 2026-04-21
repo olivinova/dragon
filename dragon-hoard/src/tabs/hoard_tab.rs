@@ -1,5 +1,5 @@
 use crate::game::GameState;
-use crate::ui::{ActionButton, BuyRow, Panel, ICON_GOLD, NumberFormat, labeled_cost};
+use crate::ui::{ActionButton, BuyRow, Panel, ICON_GOLD, NumberFormat, cost_label};
 use yew::prelude::*;
 
 /// Hoard tab UI block.
@@ -24,7 +24,7 @@ pub fn hoard_tab(props: &HoardTabProps) -> Html {
             <h2 class="section-title">{"Hoard Upgrades"}</h2>
             <BuyRow>
                 <ActionButton
-                    label={format!("Train Claws (cost {})", labeled_cost(ICON_GOLD, training_cost, props.number_style))}
+                    label={format!("Train Claws (cost {})", cost_label(ICON_GOLD, training_cost, props.number_style))}
                     onclick={props.on_buy_training.clone()}
                     disabled={g.gold < training_cost}
                     title={"Upgrade kobold training to boost click power and passive output.".to_string()}
@@ -34,7 +34,7 @@ pub fn hoard_tab(props: &HoardTabProps) -> Html {
             if !g.vault_unlocked {
                 <BuyRow>
                     <ActionButton
-                        label={format!("Buy Treasure Vault (cost {})", labeled_cost(ICON_GOLD, vault_cost, props.number_style))}
+                        label={format!("Buy Treasure Vault (cost {})", cost_label(ICON_GOLD, vault_cost, props.number_style))}
                         onclick={props.on_buy_vault.clone()}
                         disabled={g.gold < vault_cost}
                         title={"Purchase a vault to unlock steady passive gold income.".to_string()}

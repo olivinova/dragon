@@ -281,7 +281,8 @@ button {
     color: #f8fafc;
 }
 
-button {
+button,
+.button {
     border: 1px solid rgba(212, 171, 61, 0.45);
     background: rgba(212, 171, 61, 0.22);
     color: #f8fafc;
@@ -290,32 +291,32 @@ button {
     transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
-button:hover:not(:disabled) {
+button:hover:not(:disabled),
+.button:hover:not(:disabled) {
     background: rgba(212, 171, 61, 0.32);
     border-color: rgba(212, 171, 61, 0.65);
     transform: translateY(-1px);
 }
 
-button:disabled {
+button:disabled,
+.button:disabled {
     opacity: 0.45;
     cursor: not-allowed;
 }
 
-button.big,
-button.primary,
-button.primary.large {
+.button.big {
     background: rgba(212, 171, 61, 0.35);
     border-color: rgba(212, 171, 61, 0.55);
     color: white;
 }
 
-button.danger {
+.button.danger {
     background: #dc2626;
     border-color: transparent;
     color: white;
 }
 
-button.compact {
+.button.compact {
     padding: 0.7rem 0.95rem;
 }
 

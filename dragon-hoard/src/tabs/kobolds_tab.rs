@@ -1,5 +1,5 @@
 use crate::game::GameState;
-use crate::ui::{ActionButton, BuyRow, Panel, ICON_FOOD, ICON_GOLD, ICON_MANA, NumberFormat, labeled_cost, paired_cost};
+use crate::ui::{ActionButton, BuyRow, Panel, ICON_FOOD, ICON_GOLD, NumberFormat, cost_label, cost_pair};
 use yew::prelude::*;
 
 /// Kobolds tab UI block.
@@ -36,7 +36,7 @@ pub fn kobolds_tab(props: &KoboldsTabProps) -> Html {
                 <ActionButton
                     label={format!(
                         "Recruit Kobold (cost {} + {} 5)",
-                        labeled_cost(ICON_GOLD, kobold_cost, props.number_style),
+                        cost_label(ICON_GOLD, kobold_cost, props.number_style),
                         ICON_FOOD,
                     )}
                     onclick={props.on_recruit_kobold.clone()}
@@ -120,7 +120,7 @@ pub fn kobolds_tab(props: &KoboldsTabProps) -> Html {
                 <ActionButton
                     label={format!(
                         "Upgrade Kobold Efficiency ({})",
-                        paired_cost(upgrade_gold, upgrade_mana, props.number_style),
+                        cost_pair(upgrade_gold, upgrade_mana, props.number_style),
                     )}
                     onclick={props.on_upgrade_kobolds.clone()}
                     disabled={g.gold < upgrade_gold || g.mana < upgrade_mana || g.magic_level == 0}

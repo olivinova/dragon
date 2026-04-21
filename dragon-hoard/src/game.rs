@@ -12,6 +12,7 @@ pub struct GameState {
     pub space: u32,
     #[serde(alias = "housing_progress")]
     pub space_progress: f64,
+    pub space_soft_cap: f64,
     pub housing_slots: u32,
     pub storage_slots: u32,
     pub furniture_slots: u32,
@@ -42,6 +43,7 @@ impl Default for GameState {
             food: 20.0,
             space: 5,
             space_progress: 0.0,
+            space_soft_cap: 1000.0,
             housing_slots: 0,
             storage_slots: 5,
             furniture_slots: 0,
@@ -66,6 +68,10 @@ impl Default for GameState {
                     conquered: false,
                     reward_gold_per_sec: 1.0,
                     difficulty: 2.0,
+                    wants: "food".to_string(),
+                    wants_amount: 10.0,
+                    offers: "gold".to_string(),
+                    offers_amount: 50.0,
                 },
                 Town {
                     name: "Goldbridge".to_string(),
@@ -73,6 +79,10 @@ impl Default for GameState {
                     conquered: false,
                     reward_gold_per_sec: 4.0,
                     difficulty: 6.0,
+                    wants: "mana".to_string(),
+                    wants_amount: 10.0,
+                    offers: "gold".to_string(),
+                    offers_amount: 200.0,
                 },
                 Town {
                     name: "Ironkeep".to_string(),
@@ -80,6 +90,87 @@ impl Default for GameState {
                     conquered: false,
                     reward_gold_per_sec: 12.0,
                     difficulty: 14.0,
+                    wants: "gold".to_string(),
+                    wants_amount: 300.0,
+                    offers: "food".to_string(),
+                    offers_amount: 90.0,
+                },
+                Town {
+                    name: "Dragonhold Fortress".to_string(),
+                    level: 4,
+                    conquered: false,
+                    reward_gold_per_sec: 32.0,
+                    difficulty: 24.0,
+                    wants: "gold".to_string(),
+                    wants_amount: 450.0,
+                    offers: "mana".to_string(),
+                    offers_amount: 40.0,
+                },
+                Town {
+                    name: "Crystal Spire".to_string(),
+                    level: 5,
+                    conquered: false,
+                    reward_gold_per_sec: 80.0,
+                    difficulty: 38.0,
+                    wants: "food".to_string(),
+                    wants_amount: 100.0,
+                    offers: "mana".to_string(),
+                    offers_amount: 50.0,
+                },
+                Town {
+                    name: "Shadowmere Keep".to_string(),
+                    level: 6,
+                    conquered: false,
+                    reward_gold_per_sec: 192.0,
+                    difficulty: 54.0,
+                    wants: "mana".to_string(),
+                    wants_amount: 48.0,
+                    offers: "gold".to_string(),
+                    offers_amount: 720.0,
+                },
+                Town {
+                    name: "Starlight Harbor".to_string(),
+                    level: 7,
+                    conquered: false,
+                    reward_gold_per_sec: 448.0,
+                    difficulty: 72.0,
+                    wants: "food".to_string(),
+                    wants_amount: 140.0,
+                    offers: "mana".to_string(),
+                    offers_amount: 70.0,
+                },
+                Town {
+                    name: "Runehold Citadel".to_string(),
+                    level: 8,
+                    conquered: false,
+                    reward_gold_per_sec: 1024.0,
+                    difficulty: 92.0,
+                    wants: "gold".to_string(),
+                    wants_amount: 1200.0,
+                    offers: "mana".to_string(),
+                    offers_amount: 80.0,
+                },
+                Town {
+                    name: "Obsidian Palace".to_string(),
+                    level: 9,
+                    conquered: false,
+                    reward_gold_per_sec: 2304.0,
+                    difficulty: 114.0,
+                    wants: "mana".to_string(),
+                    wants_amount: 72.0,
+                    offers: "gold".to_string(),
+                    offers_amount: 2880.0,
+                },
+                Town {
+                    name: "Celestial Throne".to_string(),
+                    level: 10,
+                    conquered: false,
+                    reward_gold_per_sec: 5120.0,
+                    difficulty: 138.0,
+                    wants: "food".to_string(),
+                    wants_amount: 200.0,
+                    offers: "mana".to_string(),
+                    offers_amount: 100.0,
                 },
             ],
             dungeons: vec![
@@ -125,6 +216,12 @@ pub struct Town {
     pub conquered: bool,
     pub reward_gold_per_sec: f64,
     pub difficulty: f64,
+    /// What resource this town wants ("food", "mana", "gold")
+    pub wants: String,
+    pub wants_amount: f64,
+    /// What resource this town offers in trade
+    pub offers: String,
+    pub offers_amount: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -140,8 +237,7 @@ pub struct Dungeon {
 ///
 /// This enum makes it easier to apply delta-based changes to the game state
 /// in a generic way, rather than mutating fields directly from UI code.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug)]
 pub enum GameTrack {
     Gold,
     GoldPerSec,
@@ -151,6 +247,7 @@ pub enum GameTrack {
     ManaRegenPerSec,
     Space,
     SpaceProgress,
+    SpaceSoftCap,
     Kobolds,
     AssignedMining,
     AssignedFarming,
@@ -165,8 +262,6 @@ pub enum GameTrack {
 ///
 /// Each track can expose an optional current value, per-second rate, capacity,
 /// and/or a modifier. This makes it easier to render a generic resource UI.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameTrackProperty {
     Current,
     PerSecond,
@@ -209,37 +304,84 @@ impl GameTrackStats {
 }
 
 impl GameState {
+    /// Generate a town for a given index.
+    /// Towns scale in difficulty and rewards based on their index.
+    fn generate_town_at_index(idx: usize) -> Town {
+        let level = (idx as u32) + 1;
+        let base_difficulty = 2.0 + (level as f64) * 5.0;
+        let reward = ((1.3_f64).powi(level as i32) * 0.5).floor();
+        
+        // Town names cycle through a pattern
+        let templates = [
+            "Harbor", "Keep", "Fortress", "Tower", "Palace",
+            "Citadel", "Spire", "Haven", "Reach", "Hall",
+        ];
+        let prefixes = [
+            "North", "South", "East", "West", "High", "Deep",
+            "Shadow", "Star", "Mystic", "Ancient", "Lost", "Silent",
+        ];
+        let template = templates[idx % templates.len()];
+        let prefix = prefixes[(idx / templates.len()) % prefixes.len()];
+        let name = format!("{}{}", prefix, template);
+        
+        // Vary trades based on town index
+        let trade_rotation = idx % 6;
+        let (wants, wants_amount, offers, offers_amount) = match trade_rotation {
+            0 => ("food".to_string(), 10.0 * (level as f64), "gold".to_string(), 50.0 * (level as f64)),
+            1 => ("mana".to_string(), 5.0 * (level as f64), "gold".to_string(), 100.0 * (level as f64)),
+            2 => ("gold".to_string(), 100.0 * (level as f64), "food".to_string(), 30.0 * (level as f64)),
+            3 => ("gold".to_string(), 150.0 * (level as f64), "mana".to_string(), 10.0 * (level as f64)),
+            4 => ("food".to_string(), 20.0 * (level as f64), "mana".to_string(), 10.0 * (level as f64)),
+            _ => ("mana".to_string(), 8.0 * (level as f64), "food".to_string(), 40.0 * (level as f64)),
+        };
+        
+        Town {
+            name,
+            level,
+            conquered: false,
+            reward_gold_per_sec: reward,
+            difficulty: base_difficulty,
+            wants,
+            wants_amount,
+            offers,
+            offers_amount,
+        }
+    }
+
+    /// Ensure that a town exists at the given index, generating it if needed.
+    pub fn ensure_town_exists(&mut self, idx: usize) {
+        while self.towns.len() <= idx {
+            let town = Self::generate_town_at_index(self.towns.len());
+            self.towns.push(town);
+        }
+    }
+
     pub fn tick(&mut self, dt_seconds: f64) {
-        self.gold += self.gold_per_sec * dt_seconds;
-        self.gold += self.assigned_mining as f64 * 0.6 * self.kobold_efficiency * dt_seconds;
+        self.adjust_track(GameTrack::Gold, self.gold_per_sec * dt_seconds);
+        self.adjust_track(GameTrack::Gold, self.assigned_mining as f64 * 0.6 * self.kobold_efficiency * dt_seconds);
         let upkeep = self.kobold_upkeep() * dt_seconds;
-        self.food += self.assigned_farming as f64 * 0.35 * self.kobold_efficiency * dt_seconds;
-        self.food = (self.food - upkeep).max(0.0);
+        self.adjust_track(GameTrack::Food, self.assigned_farming as f64 * 0.35 * self.kobold_efficiency * dt_seconds);
+        self.adjust_track(GameTrack::Food, -upkeep);
         if self.food > 99999.0 {
             self.food = 99999.0;
         }
-        self.space_progress +=
-            self.assigned_digging as f64 * 0.04 * self.kobold_efficiency * dt_seconds;
-        while self.space_progress >= 1.0 {
-            self.space += 1;
-            self.space_progress -= 1.0;
-            self.storage_slots += 1;
-            self.update_gold_capacity();
-        }
-        if self.gold > self.gold_capacity {
-            self.gold = self.gold_capacity;
-        }
+        self.adjust_track(GameTrack::SpaceProgress, self.assigned_digging as f64 * 0.04 * self.kobold_efficiency * dt_seconds);
+        let excess = (self.space as f64 - self.space_soft_cap).max(0.0);
+        let multiplier = (-0.01 * excess).exp();
+        let space_to_add = (self.space_progress * multiplier).floor() as u32;
+        self.add_track(GameTrack::Space, space_to_add as f64);
+        self.adjust_track(GameTrack::SpaceProgress, -(space_to_add as f64));
+        self.storage_slots += space_to_add;
+        self.update_gold_capacity();
         // mana regeneration
         if self.mana < self.mana_capacity {
-            self.mana += self.mana_regen_per_sec * dt_seconds;
-            if self.mana > self.mana_capacity {
-                self.mana = self.mana_capacity;
-            }
+            self.adjust_track(GameTrack::Mana, self.mana_regen_per_sec * dt_seconds);
         }
     }
 
     pub fn click_loot(&mut self) {
-        self.add_track(GameTrack::Gold, 1.0 * self.click_multiplier);
+        let gold_gain = (10.0 * self.click_multiplier).round();
+        self.adjust_track(GameTrack::Gold, gold_gain);
     }
 
     pub fn kobold_cost(&self) -> f64 {
@@ -267,16 +409,12 @@ impl GameState {
         self.housing_slots + self.storage_slots + self.furniture_slots
     }
 
-    #[allow(dead_code)]
     pub fn available_space(&self) -> u32 {
         self.space.saturating_sub(self.total_allocated_space())
     }
 
     pub fn update_gold_capacity(&mut self) {
         self.gold_capacity = (self.storage_slots as f64) * 200.0;
-        if self.gold > self.gold_capacity {
-            self.gold = self.gold_capacity;
-        }
     }
 
     pub fn designate_storage_to_housing(&mut self) -> bool {
@@ -450,7 +588,6 @@ impl GameState {
             .unwrap_or(0.0)
     }
 
-    #[allow(dead_code)]
     pub fn track_stats(&self, track: GameTrack) -> GameTrackStats {
         match track {
             GameTrack::Gold => GameTrackStats::new(
@@ -471,6 +608,7 @@ impl GameState {
             GameTrack::ManaRegenPerSec => GameTrackStats::new(Some(self.mana_regen_per_sec), None, None, None),
             GameTrack::Space => GameTrackStats::new(Some(self.space as f64), None, None, None),
             GameTrack::SpaceProgress => GameTrackStats::new(Some(self.space_progress), None, None, None),
+            GameTrack::SpaceSoftCap => GameTrackStats::new(Some(self.space_soft_cap), None, None, None),
             GameTrack::Kobolds => GameTrackStats::new(
                 Some(self.kobolds as f64),
                 None,
@@ -502,7 +640,6 @@ impl GameState {
         }
     }
 
-    #[allow(dead_code)]
     pub fn track_property_value(
         &self,
         track: GameTrack,
@@ -515,7 +652,6 @@ impl GameState {
     ///
     /// Positive `delta` values add, negative values subtract.
     /// This helper keeps clamping and special bounds logic in one place.
-    #[allow(dead_code)]
     pub fn adjust_track(&mut self, track: GameTrack, delta: f64) {
         match track {
             GameTrack::Gold => {
@@ -557,6 +693,9 @@ impl GameState {
             }
             GameTrack::SpaceProgress => {
                 self.space_progress = (self.space_progress + delta).max(0.0);
+            }
+            GameTrack::SpaceSoftCap => {
+                self.space_soft_cap = (self.space_soft_cap + delta).max(0.0);
             }
             GameTrack::Kobolds => {
                 if delta >= 0.0 {
@@ -634,6 +773,7 @@ impl GameState {
             GameTrack::ManaRegenPerSec => self.mana_regen_per_sec = value.max(0.0),
             GameTrack::Space => self.space = value.max(0.0).round() as u32,
             GameTrack::SpaceProgress => self.space_progress = value.max(0.0),
+            GameTrack::SpaceSoftCap => self.space_soft_cap = value.max(0.0),
             GameTrack::Kobolds => self.kobolds = value.max(0.0).round() as u32,
             GameTrack::AssignedMining => self.assigned_mining = value.max(0.0).round() as u32,
             GameTrack::AssignedFarming => self.assigned_farming = value.max(0.0).round() as u32,
@@ -762,13 +902,17 @@ impl GameState {
 
     // Conquest & Dungeons
     pub fn town_cost(&self, idx: usize) -> f64 {
-        self.towns
-            .get(idx)
-            .map(|t| 120.0 * (t.level as f64))
-            .unwrap_or(99999.0)
+        if idx < self.towns.len() {
+            120.0 * (self.towns[idx].level as f64)
+        } else {
+            // Calculate cost for towns that haven't been generated yet
+            let level = (idx as u32) + 1;
+            120.0 * (level as f64)
+        }
     }
 
     pub fn try_conquer_town(&mut self, idx: usize) -> (bool, String) {
+        self.ensure_town_exists(idx);
         if idx >= self.towns.len() {
             return (false, "Invalid town".to_string());
         }
@@ -791,6 +935,7 @@ impl GameState {
             let name = town.name.clone();
             town.conquered = true;
             self.add_track(GameTrack::GoldPerSec, reward);
+            self.adjust_track(GameTrack::SpaceSoftCap, 1000.0);
             return (
                 true,
                 format!("Conquered {}! +{:.1} gold/sec", name, reward),
@@ -804,6 +949,56 @@ impl GameState {
                 format!("Failed to conquer {}. Lost {:.0} gold.", name, penalty),
             );
         }
+    }
+
+    pub fn try_trade_town(&mut self, idx: usize) -> (bool, String) {
+        self.ensure_town_exists(idx);
+        if idx >= self.towns.len() {
+            return (false, "Invalid town".to_string());
+        }
+
+        let town = &self.towns[idx];
+        let town_name = town.name.clone();
+        let wants_str = town.wants.clone();
+        let offers_str = town.offers.clone();
+        let wants_amount = town.wants_amount;
+        let offers_amount = town.offers_amount;
+        
+        let wants_track = match wants_str.as_str() {
+            "gold" => GameTrack::Gold,
+            "food" => GameTrack::Food,
+            "mana" => GameTrack::Mana,
+            _ => return (false, "Unknown trade".to_string()),
+        };
+        let offers_track = match offers_str.as_str() {
+            "gold" => GameTrack::Gold,
+            "food" => GameTrack::Food,
+            "mana" => GameTrack::Mana,
+            _ => return (false, "Unknown trade".to_string()),
+        };
+
+        // Check if player has what the town wants
+        if self.track_value(wants_track) < wants_amount {
+            return (
+                false,
+                format!(
+                    "Not enough {}. Need {:.0}",
+                    wants_str, wants_amount
+                ),
+            );
+        }
+
+        // Execute trade
+        self.adjust_track(wants_track, -wants_amount);
+        self.adjust_track(offers_track, offers_amount);
+
+        (
+            true,
+            format!(
+                "Traded with {}! Gave {:.0} {}, received {:.0} {}",
+                town_name, wants_amount, wants_str, offers_amount, offers_str
+            ),
+        )
     }
 
     pub fn dungeon_cost(&self, idx: usize) -> (f64, f64) {

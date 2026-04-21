@@ -1,5 +1,5 @@
 use crate::game::GameState;
-use crate::ui::{ActionButton, ICON_GOLD, ICON_MANA, NumberFormat, Panel, labeled_cost, paired_cost};
+use crate::ui::{ActionButton, cost_label, cost_pair, ICON_GOLD, NumberFormat, Panel};
 use yew::prelude::*;
 
 /// Adventure tab UI block.
@@ -10,6 +10,7 @@ pub struct AdventureTabProps {
     pub game: GameState,
     pub number_style: NumberFormat,
     pub on_conquer_town: Callback<usize>,
+    pub on_trade_town: Callback<usize>,
     pub on_explore_dungeon: Callback<usize>,
 }
 
@@ -21,28 +22,40 @@ pub fn adventure_tab(props: &AdventureTabProps) -> Html {
         <>
             <Panel class={"section-panel".to_string()}>
                 <h2 class="section-title">{"Nearby Towns"}</h2>
-                { for g.towns.iter().enumerate().map(|(i, t)| {
-                    let cb = props.on_conquer_town.clone();
+                { for (0..10.min(g.towns.len())).map(|i| {
+                    let t = &g.towns[i];
+                    let conquer_cb = props.on_conquer_town.clone();
+                    let trade_cb = props.on_trade_town.clone();
                     let town_cost = g.town_cost(i);
-                    let label = if t.conquered {
+                    let conquer_label = if t.conquered {
                         "Owned".to_string()
                     } else {
-                        format!("Conquer (cost {})", labeled_cost(ICON_GOLD, town_cost, props.number_style))
+                        format!("Conquer ({})", cost_label(ICON_GOLD, town_cost, props.number_style))
                     };
 
                     html! {
                         <div class="buy-row">
-                            <div>
+                            <div style="flex-grow: 1;">
                                 <strong>{ &t.name }</strong>
                                 <div class="muted">{ format!("difficulty {:.1}", t.difficulty) }</div>
+                                <div class="muted" style="font-size: 0.85em;">
+                                    {"Trade: "} {&t.wants_amount} {&t.wants} {" ↔ "} {&t.offers_amount} {&t.offers}
+                                </div>
                             </div>
-                            <div class="muted">{ if t.conquered { "Conquered" } else { "Free" } }</div>
-                            <ActionButton
-                                label={label}
-                                onclick={Callback::from(move |_| cb.emit(i))}
-                                disabled={t.conquered || g.gold < town_cost}
-                                title={"Conquer this town for gold rewards and new passive income.".to_string()}
-                            />
+                            <div style="display: flex; gap: 8px;">
+                                <ActionButton
+                                    label={conquer_label}
+                                    onclick={Callback::from(move |_| conquer_cb.emit(i))}
+                                    disabled={t.conquered || g.gold < town_cost}
+                                    title={"Conquer this town for gold rewards and new passive income.".to_string()}
+                                />
+                                <ActionButton
+                                    label={"Trade".to_string()}
+                                    onclick={Callback::from(move |_| trade_cb.emit(i))}
+                                    disabled=false
+                                    title={"Trade resources with this town.".to_string()}
+                                />
+                            </div>
                         </div>
                     }
                 }) }
@@ -56,7 +69,7 @@ pub fn adventure_tab(props: &AdventureTabProps) -> Html {
                     let label = if d.cleared {
                         "Cleared".to_string()
                     } else {
-                        format!("Explore ({})", paired_cost(gold_cost, mana_req, props.number_style))
+                        format!("Explore ({})", cost_pair(gold_cost, mana_req, props.number_style))
                     };
 
                     html! {

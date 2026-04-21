@@ -18,6 +18,14 @@ pub fn paired_cost(gold: f64, mana: f64, style: NumberFormat) -> String {
     format!("{} {} / {} {}", ICON_GOLD, format_cost(gold, style), ICON_MANA, format_cost(mana, style))
 }
 
+pub fn cost_label(icon: &str, value: f64, style: NumberFormat) -> String {
+    labeled_cost(icon, value, style)
+}
+
+pub fn cost_pair(gold: f64, mana: f64, style: NumberFormat) -> String {
+    paired_cost(gold, mana, style)
+}
+
 fn play_click_sound() {
     if let Ok(audio_ctx) = web_sys::AudioContext::new() {
         if let (Ok(osc), Ok(gain)) = (audio_ctx.create_oscillator(), audio_ctx.create_gain()) {
@@ -164,7 +172,7 @@ pub fn action_button(props: &ActionButtonProps) -> Html {
         <button
             {onclick}
             disabled={props.disabled}
-            class={classes!(props.class.clone())}
+            class={classes!("button", props.class.clone())}
             title={props.title.clone()}
         >
             { &props.label }
@@ -218,6 +226,30 @@ pub fn stat_row(props: &StatRowProps) -> Html {
             </div>
             <strong>{ &props.value }</strong>
         </div>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+pub struct ResourceStatRowProps {
+    pub label: String,
+    pub icon: String,
+    pub value: String,
+    #[prop_or_default]
+    pub hint: String,
+    #[prop_or_default]
+    pub hint_class: String,
+}
+
+#[function_component(ResourceStatRow)]
+pub fn resource_stat_row(props: &ResourceStatRowProps) -> Html {
+    html! {
+        <StatRow
+            label={props.label.clone()}
+            value={props.value.clone()}
+            icon={Some(props.icon.clone())}
+            hint={props.hint.clone()}
+            hint_class={props.hint_class.clone()}
+        />
     }
 }
 

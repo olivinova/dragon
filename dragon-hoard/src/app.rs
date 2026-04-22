@@ -98,7 +98,7 @@ pub fn app() -> Html {
 
                 <main class="right-panel">
                     <Panel class={"toolbar".to_string()}>
-                        <ActionButton label={format!("Loot (click) +{}", cost_label(ICON_GOLD, g.click_multiplier, current_number_style))} onclick={callbacks.on_click_loot.clone()} class={"big".to_string()} />
+                        <ActionButton label={format!("Loot (click) +{}", cost_label(ICON_GOLD, g.click_multiplier, current_number_style))} onclick={callbacks.on_click_loot.clone()} class={"big".to_string()} title={"Click to collect gold from your hoard. Power increases with click multiplier upgrades.".to_string()} />
                         <div class="controls format-toggle">
                             { for [
                                 (NumberFormat::Standard, "Standard"),
@@ -157,6 +157,10 @@ pub fn app() -> Html {
                                     on_unassign_farming={callbacks.on_unassign_farming.clone()}
                                     on_assign_digging={callbacks.on_assign_digging.clone()}
                                     on_unassign_digging={callbacks.on_unassign_digging.clone()}
+                                    on_assign_military={callbacks.on_assign_military.clone()}
+                                    on_unassign_military={callbacks.on_unassign_military.clone()}
+                                    on_assign_research={callbacks.on_assign_research.clone()}
+                                    on_unassign_research={callbacks.on_unassign_research.clone()}
                                     on_upgrade_kobolds={callbacks.on_upgrade_kobolds.clone()}
                                     on_designate_housing={callbacks.on_designate_housing.clone()}
                                     on_reclaim_housing={callbacks.on_reclaim_housing.clone()}
@@ -170,6 +174,12 @@ pub fn app() -> Html {
                                     game={g.clone()}
                                     number_style={current_number_style}
                                     on_learn_magic={callbacks.on_learn_magic.clone()}
+                                    on_learn_necromancy={callbacks.on_learn_necromancy.clone()}
+                                    on_learn_alchemy={callbacks.on_learn_alchemy.clone()}
+                                    on_learn_restoration={callbacks.on_learn_restoration.clone()}
+                                    on_learn_elemental={callbacks.on_learn_elemental.clone()}
+                                    on_learn_summoning={callbacks.on_learn_summoning.clone()}
+                                    on_learn_enchanting={callbacks.on_learn_enchanting.clone()}
                                     on_craft_enchant={callbacks.on_craft_enchant.clone()}
                                     on_sell_enchant={callbacks.on_sell_enchant.clone()}
                                 />

@@ -16,6 +16,10 @@ pub struct KoboldsTabProps {
     pub on_unassign_farming: Callback<MouseEvent>,
     pub on_assign_digging: Callback<MouseEvent>,
     pub on_unassign_digging: Callback<MouseEvent>,
+    pub on_assign_military: Callback<MouseEvent>,
+    pub on_unassign_military: Callback<MouseEvent>,
+    pub on_assign_research: Callback<MouseEvent>,
+    pub on_unassign_research: Callback<MouseEvent>,
     pub on_upgrade_kobolds: Callback<MouseEvent>,
     pub on_designate_housing: Callback<MouseEvent>,
     pub on_reclaim_housing: Callback<MouseEvent>,
@@ -41,6 +45,7 @@ pub fn kobolds_tab(props: &KoboldsTabProps) -> Html {
                     )}
                     onclick={props.on_recruit_kobold.clone()}
                     disabled={g.gold < kobold_cost || g.food < 5.0 || g.kobolds >= g.housing_slots}
+                    title={"Recruit a new kobold to work in your hoard. Requires gold, food, and housing space.".to_string()}
                 />
                 <div class="muted">{ format!("Housing: {} kobolds / {} rooms", g.kobolds, g.housing_slots) }</div>
             </BuyRow>
@@ -116,6 +121,34 @@ pub fn kobolds_tab(props: &KoboldsTabProps) -> Html {
                     title={"Remove a digging kobold from cave space expansion.".to_string()}
                 />
             </BuyRow>
+                        <BuyRow>
+                <ActionButton
+                    label={format!("Assign Military kobold ({})", g.assigned_military)}
+                    onclick={props.on_assign_military.clone()}
+                    disabled={g.free_kobolds() == 0}
+                    title={"Military kobolds are used to take over or protect territory.".to_string()}
+                />
+                <ActionButton
+                    label={"Unassign".to_string()}
+                    onclick={props.on_unassign_military.clone()}
+                    disabled={g.assigned_military == 0}
+                    title={"Remove a Military kobold from territory control.".to_string()}
+                />
+            </BuyRow>
+            <BuyRow>
+                <ActionButton
+                    label={format!("Assign Research kobold ({})", g.assigned_research)}
+                    onclick={props.on_assign_research.clone()}
+                    disabled={g.free_kobolds() == 0}
+                    title={"Research kobolds study magic specializations to unlock new types of enchantments.".to_string()}
+                />
+                <ActionButton
+                    label={"Unassign".to_string()}
+                    onclick={props.on_unassign_research.clone()}
+                    disabled={g.assigned_research == 0}
+                    title={"Remove a Research kobold from magical studies.".to_string()}
+                />
+            </BuyRow>
             <BuyRow>
                 <ActionButton
                     label={format!(
@@ -125,6 +158,7 @@ pub fn kobolds_tab(props: &KoboldsTabProps) -> Html {
                     onclick={props.on_upgrade_kobolds.clone()}
                     disabled={g.gold < upgrade_gold || g.mana < upgrade_mana || g.magic_level == 0}
                     class={"big".to_string()}
+                    title={"Boost kobold efficiency to increase all resource production. Requires magic knowledge.".to_string()}
                 />
             </BuyRow>
             <BuyRow>

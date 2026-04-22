@@ -19,6 +19,10 @@ pub fn create_app_callbacks(
         on_unassign_farming: mutate_game(game.clone(), |g| { g.unassign_farming(); }),
         on_assign_digging: mutate_game(game.clone(), |g| { g.assign_digging(); }),
         on_unassign_digging: mutate_game(game.clone(), |g| { g.unassign_digging(); }),
+        on_assign_military: mutate_game(game.clone(), |g| { g.assign_military(); }),
+        on_unassign_military: mutate_game(game.clone(), |g| { g.unassign_military(); }),
+        on_assign_research: mutate_game(game.clone(), |g| { g.assign_research(); }),
+        on_unassign_research: mutate_game(game.clone(), |g| { g.unassign_research(); }),
         on_upgrade_kobolds: mutate_game(game.clone(), |g| { g.upgrade_kobold_efficiency(); }),
         on_buy_training: mutate_game(game.clone(), |g| { g.buy_training(); }),
         on_buy_vault: mutate_game(game.clone(), |g| { g.buy_vault(); }),
@@ -94,6 +98,12 @@ pub fn create_app_callbacks(
 
         // Magic actions
         on_learn_magic: mutate_game(game.clone(), |g| { g.learn_magic(); }),
+        on_learn_necromancy: mutate_game(game.clone(), |g| { g.learn_necromancy(); }),
+        on_learn_alchemy: mutate_game(game.clone(), |g| { g.learn_alchemy(); }),
+        on_learn_restoration: mutate_game(game.clone(), |g| { g.learn_restoration(); }),
+        on_learn_elemental: mutate_game(game.clone(), |g| { g.learn_elemental(); }),
+        on_learn_summoning: mutate_game(game.clone(), |g| { g.learn_summoning(); }),
+        on_learn_enchanting: mutate_game(game.clone(), |g| { g.learn_enchanting(); }),
         on_craft_enchant: mutate_game(game.clone(), |g| { g.craft_enchantment(); }),
         on_sell_enchant: mutate_game_index(game.clone(), |g, idx| { g.sell_enchantment(idx); }),
 
@@ -134,6 +144,7 @@ pub fn create_app_callbacks(
 }
 
 #[derive(Clone)]
+/// Application callbacks for all game actions
 pub struct AppCallbacks {
     pub on_click_loot: Callback<MouseEvent>,
     pub on_recruit_kobold: Callback<MouseEvent>,
@@ -143,6 +154,10 @@ pub struct AppCallbacks {
     pub on_unassign_farming: Callback<MouseEvent>,
     pub on_assign_digging: Callback<MouseEvent>,
     pub on_unassign_digging: Callback<MouseEvent>,
+    pub on_assign_military: Callback<MouseEvent>,
+    pub on_unassign_military: Callback<MouseEvent>,
+    pub on_assign_research: Callback<MouseEvent>,
+    pub on_unassign_research: Callback<MouseEvent>,
     pub on_upgrade_kobolds: Callback<MouseEvent>,
     pub on_buy_training: Callback<MouseEvent>,
     pub on_buy_vault: Callback<MouseEvent>,
@@ -156,6 +171,12 @@ pub struct AppCallbacks {
     pub on_load: Callback<MouseEvent>,
     pub on_reset: Callback<MouseEvent>,
     pub on_learn_magic: Callback<MouseEvent>,
+    pub on_learn_necromancy: Callback<MouseEvent>,
+    pub on_learn_alchemy: Callback<MouseEvent>,
+    pub on_learn_restoration: Callback<MouseEvent>,
+    pub on_learn_elemental: Callback<MouseEvent>,
+    pub on_learn_summoning: Callback<MouseEvent>,
+    pub on_learn_enchanting: Callback<MouseEvent>,
     pub on_craft_enchant: Callback<MouseEvent>,
     pub on_sell_enchant: Callback<usize>,
     pub on_conquer_town: Callback<usize>,

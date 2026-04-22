@@ -22,18 +22,18 @@ pub fn adventure_tab(props: &AdventureTabProps) -> Html {
         <>
             <Panel class={"section-panel".to_string()}>
                 <h2 class="section-title">{"Nearby Towns"}</h2>
-                { for (0..10.min(g.towns.len())).map(|i| {
+                <div class="muted">{ format!("Conquered: {} (need {} military for upkeep)", g.conquered_towns, g.conquered_towns) }</div>
+                { for (0..g.towns.len()).filter_map(|i| {
                     let t = &g.towns[i];
+                    if t.conquered {
+                        return None;
+                    }
                     let conquer_cb = props.on_conquer_town.clone();
                     let trade_cb = props.on_trade_town.clone();
                     let town_cost = g.town_cost(i);
-                    let conquer_label = if t.conquered {
-                        "Owned".to_string()
-                    } else {
-                        format!("Conquer ({})", cost_label(ICON_GOLD, town_cost, props.number_style))
-                    };
+                    let conquer_label = format!("Conquer ({})", cost_label(ICON_GOLD, town_cost, props.number_style));
 
-                    html! {
+                    Some(html! {
                         <div class="buy-row">
                             <div style="flex-grow: 1;">
                                 <strong>{ &t.name }</strong>
@@ -46,18 +46,18 @@ pub fn adventure_tab(props: &AdventureTabProps) -> Html {
                                 <ActionButton
                                     label={conquer_label}
                                     onclick={Callback::from(move |_| conquer_cb.emit(i))}
-                                    disabled={t.conquered || g.gold < town_cost}
-                                    title={"Conquer this town for gold rewards and new passive income.".to_string()}
+                                    disabled={g.gold < town_cost}
+                                    title={format!("Conquer this town to gain {:.1} gold/sec passive income and +1000 space soft cap. Requires military and strength. Needs 1 military kobold per town to maintain benefits.", t.reward_gold_per_sec)}
                                 />
                                 <ActionButton
                                     label={"Trade".to_string()}
                                     onclick={Callback::from(move |_| trade_cb.emit(i))}
                                     disabled=false
-                                    title={"Trade resources with this town.".to_string()}
+                                    title={format!("Exchange {} {} for {} {} with this town.", t.wants_amount, t.wants, t.offers_amount, t.offers)}
                                 />
                             </div>
                         </div>
-                    }
+                    })
                 }) }
             </Panel>
 
@@ -83,7 +83,7 @@ pub fn adventure_tab(props: &AdventureTabProps) -> Html {
                                 label={label}
                                 onclick={Callback::from(move |_| cb.emit(i))}
                                 disabled={d.cleared || g.gold < gold_cost || g.mana < mana_req}
-                                title={"Explore the dungeon to earn gold and mana rewards if you meet the cost.".to_string()}
+                                title={format!("Explore this dungeon to earn {:.0} gold and unique enchantments. Requires strength, gold cost, and mana. You can find legendary artifacts here.", d.reward_gold)}
                             />
                         </div>
                     }

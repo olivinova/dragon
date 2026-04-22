@@ -20,17 +20,26 @@ pub struct GameState {
     pub assigned_mining: u32,
     pub assigned_farming: u32,
     pub assigned_digging: u32,
+    pub assigned_military: u32,
+    pub assigned_research: u32,
     pub kobold_efficiency: f64,
     pub kobold_upgrade_level: u32,
     pub click_multiplier: f64,
     pub training_level: u32,
     pub vault_unlocked: bool,
     pub magic_level: u32,
+    pub necromancy_level: u32,
+    pub alchemy_level: u32,
+    pub restoration_level: u32,
+    pub elemental_level: u32,
+    pub summoning_level: u32,
+    pub enchanting_level: u32,
     pub mana: f64,
     pub mana_capacity: f64,
     pub mana_regen_per_sec: f64,
     pub enchantments: Vec<Enchantment>,
     pub towns: Vec<Town>,
+    pub conquered_towns: u32,
     pub dungeons: Vec<Dungeon>,
 }
 
@@ -51,16 +60,25 @@ impl Default for GameState {
             assigned_mining: 0,
             assigned_farming: 0,
             assigned_digging: 0,
+            assigned_military: 0,
+            assigned_research: 0,
             kobold_efficiency: 1.0,
             kobold_upgrade_level: 0,
             click_multiplier: 1.0,
             training_level: 0,
             vault_unlocked: false,
             magic_level: 0,
+            necromancy_level: 0,
+            alchemy_level: 0,
+            restoration_level: 0,
+            elemental_level: 0,
+            summoning_level: 0,
+            enchanting_level: 0,
             mana: 0.0,
             mana_capacity: 10.0,
             mana_regen_per_sec: 0.5,
             enchantments: Vec::new(),
+            conquered_towns: 0,
             towns: vec![
                 Town {
                     name: "Pebbleton".to_string(),
@@ -252,9 +270,17 @@ pub enum GameTrack {
     AssignedMining,
     AssignedFarming,
     AssignedDigging,
+    AssignedMilitary,
+    AssignedResearch,
     KoboldEfficiency,
     TrainingLevel,
     MagicLevel,
+    NecromancyLevel,
+    AlchemyLevel,
+    RestorationLevel,
+    ElementalLevel,
+    SummoningLevel,
+    EnchantingLevel,
     ClickMultiplier,
 }
 
@@ -349,23 +375,63 @@ impl GameState {
     }
 
     /// Ensure that a town exists at the given index, generating it if needed.
+    /// Conquered towns are replaced with newly generated towns.
     pub fn ensure_town_exists(&mut self, idx: usize) {
         while self.towns.len() <= idx {
             let town = Self::generate_town_at_index(self.towns.len());
             self.towns.push(town);
         }
+        // Replace conquered towns with new generated towns
+        for i in 0..self.towns.len() {
+            if self.towns[i].conquered && i < idx {
+                let new_town = Self::generate_town_at_index(i);
+                self.towns[i] = new_town;
+            }
+        }
     }
 
     pub fn tick(&mut self, dt_seconds: f64) {
-        self.adjust_track(GameTrack::Gold, self.gold_per_sec * dt_seconds);
-        self.adjust_track(GameTrack::Gold, self.assigned_mining as f64 * 0.6 * self.kobold_efficiency * dt_seconds);
+        // Effective kobold efficiency includes enchanting bonuses (small bonus to all output)
+        let effective_eff = self.kobold_efficiency * (1.0 + 0.04 * (self.enchanting_level as f64));
+
+        // Restoration reduces military upkeep requirements for conquered towns
+        let required_per_town = (1.0 - 0.15 * (self.restoration_level as f64)).max(0.0);
+        let military_per_town = if self.conquered_towns > 0 {
+            (self.assigned_military as f64) / (self.conquered_towns as f64)
+        } else {
+            1.0
+        };
+
+        // If maintenance not met, disable conquered-town passive income
+        let effective_gold_per_sec = if military_per_town < required_per_town {
+            self.gold_per_sec - (self.towns.iter()
+                .filter(|t| t.conquered)
+                .map(|t| t.reward_gold_per_sec)
+                .sum::<f64>())
+        } else {
+            self.gold_per_sec
+        };
+
+        // Base passive gold and kobold-produced gold
+        self.adjust_track(GameTrack::Gold, effective_gold_per_sec * dt_seconds);
+
+        // Alchemy increases miner output (+12% per level)
+        let alchemy_mult = 1.0 + 0.12 * (self.alchemy_level as f64);
+        self.adjust_track(GameTrack::Gold, self.assigned_mining as f64 * 0.6 * effective_eff * alchemy_mult * dt_seconds);
+
+        // Military kobolds provide minor gold when assigned
+        self.adjust_track(GameTrack::Gold, self.assigned_military as f64 * 0.4 * effective_eff * dt_seconds);
+
+        // Food production and upkeep
+        self.adjust_track(GameTrack::Food, self.assigned_farming as f64 * 0.35 * effective_eff * dt_seconds);
         let upkeep = self.kobold_upkeep() * dt_seconds;
-        self.adjust_track(GameTrack::Food, self.assigned_farming as f64 * 0.35 * self.kobold_efficiency * dt_seconds);
         self.adjust_track(GameTrack::Food, -upkeep);
         if self.food > 99999.0 {
             self.food = 99999.0;
         }
-        self.adjust_track(GameTrack::SpaceProgress, self.assigned_digging as f64 * 0.04 * self.kobold_efficiency * dt_seconds);
+
+        // Digging / space progress
+        self.adjust_track(GameTrack::SpaceProgress, self.assigned_digging as f64 * 0.04 * effective_eff * dt_seconds);
         let excess = (self.space as f64 - self.space_soft_cap).max(0.0);
         let multiplier = (-0.01 * excess).exp();
         let space_to_add = (self.space_progress * multiplier).floor() as u32;
@@ -373,6 +439,42 @@ impl GameState {
         self.adjust_track(GameTrack::SpaceProgress, -(space_to_add as f64));
         self.storage_slots += space_to_add;
         self.update_gold_capacity();
+
+        // Necromancy: undead workers provide extra output at mana cost
+        if self.necromancy_level > 0 {
+            let undead_count = self.necromancy_level as f64;
+            let mana_cost = 0.4 * undead_count * dt_seconds; // mana/sec per undead
+            let production = 0.6 * undead_count * dt_seconds; // gold/sec equivalent
+            let mana_available = self.mana;
+            if mana_available >= mana_cost {
+                self.subtract_track(GameTrack::Mana, mana_cost);
+                self.adjust_track(GameTrack::Gold, production);
+            } else if mana_available > 0.0 {
+                // partial effect if low on mana
+                let frac = mana_available / mana_cost;
+                self.subtract_track(GameTrack::Mana, mana_available);
+                self.adjust_track(GameTrack::Gold, production * frac);
+            }
+        }
+
+        // Summoning: more efficient helpers but require soldiers to maintain efficiency
+        if self.summoning_level > 0 {
+            let summon_count = self.summoning_level as f64;
+            let mana_cost = 0.5 * summon_count * dt_seconds;
+            // Efficiency scales with soldiers; bonus per soldier assigned
+            let soldier_factor = 1.0 + 0.08 * (self.assigned_military as f64);
+            let production = 0.9 * summon_count * soldier_factor * dt_seconds;
+            let mana_available = self.mana;
+            if mana_available >= mana_cost {
+                self.subtract_track(GameTrack::Mana, mana_cost);
+                self.adjust_track(GameTrack::Gold, production);
+            } else if mana_available > 0.0 {
+                let frac = mana_available / mana_cost;
+                self.subtract_track(GameTrack::Mana, mana_available);
+                self.adjust_track(GameTrack::Gold, production * frac);
+            }
+        }
+
         // mana regeneration
         if self.mana < self.mana_capacity {
             self.adjust_track(GameTrack::Mana, self.mana_regen_per_sec * dt_seconds);
@@ -402,7 +504,14 @@ impl GameState {
 
     pub fn free_kobolds(&self) -> u32 {
         self.kobolds
-            .saturating_sub(self.assigned_mining + self.assigned_farming + self.assigned_digging)
+            .saturating_sub(self.assigned_mining + self.assigned_farming + self.assigned_digging + self.assigned_military + self.assigned_research)
+    }
+
+    pub fn military_power(&self) -> f64 {
+        let base_power = (self.assigned_military as f64) * 2.0;
+        // Elemental specialization increases combat power
+        let elemental_mult = 1.0 + 0.18 * (self.elemental_level as f64);
+        base_power * elemental_mult
     }
 
     pub fn total_allocated_space(&self) -> u32 {
@@ -509,6 +618,42 @@ impl GameState {
     pub fn unassign_digging(&mut self) -> bool {
         if self.assigned_digging > 0 {
             self.subtract_track(GameTrack::AssignedDigging, 1.0);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn assign_military(&mut self) -> bool {
+        if self.free_kobolds() > 0 {
+            self.add_track(GameTrack::AssignedMilitary, 1.0);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn unassign_military(&mut self) -> bool {
+        if self.assigned_military > 0 {
+            self.subtract_track(GameTrack::AssignedMilitary, 1.0);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn assign_research(&mut self) -> bool {
+        if self.free_kobolds() > 0 {
+            self.add_track(GameTrack::AssignedResearch, 1.0);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn unassign_research(&mut self) -> bool {
+        if self.assigned_research > 0 {
+            self.subtract_track(GameTrack::AssignedResearch, 1.0);
             true
         } else {
             false
@@ -633,9 +778,27 @@ impl GameState {
                 Some(self.kobolds as f64),
                 Some(self.kobold_efficiency),
             ),
+            GameTrack::AssignedMilitary => GameTrackStats::new(
+                Some(self.assigned_military as f64),
+                None,
+                Some(self.kobolds as f64),
+                Some(self.kobold_efficiency),
+            ),
+            GameTrack::AssignedResearch => GameTrackStats::new(
+                Some(self.assigned_research as f64),
+                None,
+                Some(self.kobolds as f64),
+                Some(self.kobold_efficiency),
+            ),
             GameTrack::KoboldEfficiency => GameTrackStats::new(Some(self.kobold_efficiency), None, None, None),
             GameTrack::TrainingLevel => GameTrackStats::new(Some(self.training_level as f64), None, None, None),
             GameTrack::MagicLevel => GameTrackStats::new(Some(self.magic_level as f64), None, None, None),
+            GameTrack::NecromancyLevel => GameTrackStats::new(Some(self.necromancy_level as f64), None, None, None),
+            GameTrack::AlchemyLevel => GameTrackStats::new(Some(self.alchemy_level as f64), None, None, None),
+            GameTrack::RestorationLevel => GameTrackStats::new(Some(self.restoration_level as f64), None, None, None),
+            GameTrack::ElementalLevel => GameTrackStats::new(Some(self.elemental_level as f64), None, None, None),
+            GameTrack::SummoningLevel => GameTrackStats::new(Some(self.summoning_level as f64), None, None, None),
+            GameTrack::EnchantingLevel => GameTrackStats::new(Some(self.enchanting_level as f64), None, None, None),
             GameTrack::ClickMultiplier => GameTrackStats::new(Some(self.click_multiplier), None, None, None),
         }
     }
@@ -725,6 +888,20 @@ impl GameState {
                     self.assigned_digging = self.assigned_digging.saturating_sub(delta.abs().round() as u32);
                 }
             }
+            GameTrack::AssignedMilitary => {
+                if delta >= 0.0 {
+                    self.assigned_military = self.assigned_military.saturating_add(delta.round() as u32);
+                } else {
+                    self.assigned_military = self.assigned_military.saturating_sub(delta.abs().round() as u32);
+                }
+            }
+            GameTrack::AssignedResearch => {
+                if delta >= 0.0 {
+                    self.assigned_research = self.assigned_research.saturating_add(delta.round() as u32);
+                } else {
+                    self.assigned_research = self.assigned_research.saturating_sub(delta.abs().round() as u32);
+                }
+            }
             GameTrack::KoboldEfficiency => {
                 self.kobold_efficiency = (self.kobold_efficiency + delta).max(0.0);
             }
@@ -740,6 +917,48 @@ impl GameState {
                     self.magic_level = self.magic_level.saturating_add(delta.round() as u32);
                 } else {
                     self.magic_level = self.magic_level.saturating_sub(delta.abs().round() as u32);
+                }
+            }
+            GameTrack::NecromancyLevel => {
+                if delta >= 0.0 {
+                    self.necromancy_level = self.necromancy_level.saturating_add(delta.round() as u32);
+                } else {
+                    self.necromancy_level = self.necromancy_level.saturating_sub(delta.abs().round() as u32);
+                }
+            }
+            GameTrack::AlchemyLevel => {
+                if delta >= 0.0 {
+                    self.alchemy_level = self.alchemy_level.saturating_add(delta.round() as u32);
+                } else {
+                    self.alchemy_level = self.alchemy_level.saturating_sub(delta.abs().round() as u32);
+                }
+            }
+            GameTrack::RestorationLevel => {
+                if delta >= 0.0 {
+                    self.restoration_level = self.restoration_level.saturating_add(delta.round() as u32);
+                } else {
+                    self.restoration_level = self.restoration_level.saturating_sub(delta.abs().round() as u32);
+                }
+            }
+            GameTrack::ElementalLevel => {
+                if delta >= 0.0 {
+                    self.elemental_level = self.elemental_level.saturating_add(delta.round() as u32);
+                } else {
+                    self.elemental_level = self.elemental_level.saturating_sub(delta.abs().round() as u32);
+                }
+            }
+            GameTrack::SummoningLevel => {
+                if delta >= 0.0 {
+                    self.summoning_level = self.summoning_level.saturating_add(delta.round() as u32);
+                } else {
+                    self.summoning_level = self.summoning_level.saturating_sub(delta.abs().round() as u32);
+                }
+            }
+            GameTrack::EnchantingLevel => {
+                if delta >= 0.0 {
+                    self.enchanting_level = self.enchanting_level.saturating_add(delta.round() as u32);
+                } else {
+                    self.enchanting_level = self.enchanting_level.saturating_sub(delta.abs().round() as u32);
                 }
             }
             GameTrack::ClickMultiplier => {
@@ -778,9 +997,17 @@ impl GameState {
             GameTrack::AssignedMining => self.assigned_mining = value.max(0.0).round() as u32,
             GameTrack::AssignedFarming => self.assigned_farming = value.max(0.0).round() as u32,
             GameTrack::AssignedDigging => self.assigned_digging = value.max(0.0).round() as u32,
+            GameTrack::AssignedMilitary => self.assigned_military = value.max(0.0).round() as u32,
+            GameTrack::AssignedResearch => self.assigned_research = value.max(0.0).round() as u32,
             GameTrack::KoboldEfficiency => self.kobold_efficiency = value.max(0.0),
             GameTrack::TrainingLevel => self.training_level = value.max(0.0).round() as u32,
             GameTrack::MagicLevel => self.magic_level = value.max(0.0).round() as u32,
+            GameTrack::NecromancyLevel => self.necromancy_level = value.max(0.0).round() as u32,
+            GameTrack::AlchemyLevel => self.alchemy_level = value.max(0.0).round() as u32,
+            GameTrack::RestorationLevel => self.restoration_level = value.max(0.0).round() as u32,
+            GameTrack::ElementalLevel => self.elemental_level = value.max(0.0).round() as u32,
+            GameTrack::SummoningLevel => self.summoning_level = value.max(0.0).round() as u32,
+            GameTrack::EnchantingLevel => self.enchanting_level = value.max(0.0).round() as u32,
             GameTrack::ClickMultiplier => self.click_multiplier = value.max(0.0),
         }
     }
@@ -815,6 +1042,127 @@ impl GameState {
         }
     }
 
+    pub fn specialization_cost(&self, level: u32) -> f64 {
+        500.0 * 2.5_f64.powi(level as i32)
+    }
+
+    pub fn total_specialization_levels(&self) -> u32 {
+        self.necromancy_level + self.alchemy_level + self.restoration_level 
+            + self.elemental_level + self.summoning_level + self.enchanting_level
+    }
+
+    pub fn specialization_research_cost(&self) -> u32 {
+        2 + self.total_specialization_levels()
+    }
+
+    pub fn learn_necromancy(&mut self) -> bool {
+        if self.magic_level == 0 {
+            return false;
+        }
+        let research_needed = self.specialization_research_cost();
+        if self.assigned_research < research_needed {
+            return false;
+        }
+        let cost = self.specialization_cost(self.necromancy_level);
+        if self.track_value(GameTrack::Gold) >= cost {
+            self.subtract_track(GameTrack::Gold, cost);
+            self.add_track(GameTrack::NecromancyLevel, 1.0);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn learn_alchemy(&mut self) -> bool {
+        if self.magic_level == 0 {
+            return false;
+        }
+        let research_needed = self.specialization_research_cost();
+        if self.assigned_research < research_needed {
+            return false;
+        }
+        let cost = self.specialization_cost(self.alchemy_level);
+        if self.track_value(GameTrack::Gold) >= cost {
+            self.subtract_track(GameTrack::Gold, cost);
+            self.add_track(GameTrack::AlchemyLevel, 1.0);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn learn_restoration(&mut self) -> bool {
+        if self.magic_level == 0 {
+            return false;
+        }
+        let research_needed = self.specialization_research_cost();
+        if self.assigned_research < research_needed {
+            return false;
+        }
+        let cost = self.specialization_cost(self.restoration_level);
+        if self.track_value(GameTrack::Gold) >= cost {
+            self.subtract_track(GameTrack::Gold, cost);
+            self.add_track(GameTrack::RestorationLevel, 1.0);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn learn_elemental(&mut self) -> bool {
+        if self.magic_level == 0 {
+            return false;
+        }
+        let research_needed = self.specialization_research_cost();
+        if self.assigned_research < research_needed {
+            return false;
+        }
+        let cost = self.specialization_cost(self.elemental_level);
+        if self.track_value(GameTrack::Gold) >= cost {
+            self.subtract_track(GameTrack::Gold, cost);
+            self.add_track(GameTrack::ElementalLevel, 1.0);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn learn_summoning(&mut self) -> bool {
+        if self.magic_level == 0 {
+            return false;
+        }
+        let research_needed = self.specialization_research_cost();
+        if self.assigned_research < research_needed {
+            return false;
+        }
+        let cost = self.specialization_cost(self.summoning_level);
+        if self.track_value(GameTrack::Gold) >= cost {
+            self.subtract_track(GameTrack::Gold, cost);
+            self.add_track(GameTrack::SummoningLevel, 1.0);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn learn_enchanting(&mut self) -> bool {
+        if self.magic_level == 0 {
+            return false;
+        }
+        let research_needed = self.specialization_research_cost();
+        if self.assigned_research < research_needed {
+            return false;
+        }
+        let cost = self.specialization_cost(self.enchanting_level);
+        if self.track_value(GameTrack::Gold) >= cost {
+            self.subtract_track(GameTrack::Gold, cost);
+            self.add_track(GameTrack::EnchantingLevel, 1.0);
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn enchant_cost(&self) -> (f64, f64) {
         // returns (gold_cost, mana_cost)
         let gold_cost = 100.0 * (1.0 + 0.5 * (self.magic_level as f64));
@@ -828,7 +1176,7 @@ impl GameState {
             self.subtract_track(GameTrack::Gold, gold_cost);
             self.subtract_track(GameTrack::Mana, mana_cost);
 
-            let index = self.enchantments.len() % 5;
+            let index = self.enchantments.len() % 11;
             let (kind, effect) = match index {
                 0 => (
                     "Flame Glyph",
@@ -846,9 +1194,33 @@ impl GameState {
                     "Runic Scale",
                     "Hardens your hoard and increases passive flow".to_string(),
                 ),
-                _ => (
+                4 => (
                     "Moonshard",
                     "Infuses the hoard with mysterious lunar magic".to_string(),
+                ),
+                5 => (
+                    "Necrotic Rune",
+                    "Channels death energy to amplify your defenses".to_string(),
+                ),
+                6 => (
+                    "Alchemical Flask",
+                    "Transmutes resources into more valuable forms".to_string(),
+                ),
+                7 => (
+                    "Restoration Ward",
+                    "Heals and regenerates your magical reserves".to_string(),
+                ),
+                8 => (
+                    "Elemental Core",
+                    "Harnesses raw elemental forces for greater power".to_string(),
+                ),
+                9 => (
+                    "Summoning Circle",
+                    "Calls forth allies to aid in your conquests".to_string(),
+                ),
+                _ => (
+                    "Enchantment Matrix",
+                    "Creates complex magical patterns for advanced effects".to_string(),
                 ),
             };
 
@@ -923,6 +1295,7 @@ impl GameState {
         // compute strength vs difficulty before mutably borrowing town
         let strength = (self.training_level as f64) * 1.5
             + (self.magic_level as f64) * 1.2
+            + self.military_power()
             + self.total_enchant_power();
         if self.towns[idx].conquered {
             return (false, format!("{} already conquered", self.towns[idx].name));
@@ -936,6 +1309,7 @@ impl GameState {
             town.conquered = true;
             self.add_track(GameTrack::GoldPerSec, reward);
             self.adjust_track(GameTrack::SpaceSoftCap, 1000.0);
+            self.conquered_towns += 1;
             return (
                 true,
                 format!("Conquered {}! +{:.1} gold/sec", name, reward),
@@ -958,6 +1332,10 @@ impl GameState {
         }
 
         let town = &self.towns[idx];
+        if town.conquered {
+            return (false, format!("{} is conquered and cannot be traded with", town.name));
+        }
+
         let town_name = town.name.clone();
         let wants_str = town.wants.clone();
         let offers_str = town.offers.clone();
@@ -1023,6 +1401,7 @@ impl GameState {
         // compute strength before mutable borrow
         let strength = (self.training_level as f64) * 1.5
             + (self.magic_level as f64) * 1.2
+            + self.military_power()
             + self.total_enchant_power();
         if self.dungeons[idx].cleared {
             return (false, format!("{} already cleared", self.dungeons[idx].name));

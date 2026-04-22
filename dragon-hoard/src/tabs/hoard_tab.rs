@@ -27,7 +27,7 @@ pub fn hoard_tab(props: &HoardTabProps) -> Html {
                     label={format!("Train Claws (cost {})", cost_label(ICON_GOLD, training_cost, props.number_style))}
                     onclick={props.on_buy_training.clone()}
                     disabled={g.gold < training_cost}
-                    title={"Upgrade kobold training to boost click power and passive output.".to_string()}
+                    title={"Improve kobold training to increase click power and passive resource generation. Each level provides 25% more output.".to_string()}
                 />
                 <div class="muted">{ format!("Level: {}", g.training_level) }</div>
             </BuyRow>
@@ -37,7 +37,7 @@ pub fn hoard_tab(props: &HoardTabProps) -> Html {
                         label={format!("Buy Treasure Vault (cost {})", cost_label(ICON_GOLD, vault_cost, props.number_style))}
                         onclick={props.on_buy_vault.clone()}
                         disabled={g.gold < vault_cost}
-                        title={"Purchase a vault to unlock steady passive gold income.".to_string()}
+                        title={"Unlock the Treasure Vault to gain steady passive gold generation. This adds approximately 1 gold/sec to your income.".to_string()}
                     />
                     <div class="muted">{"Unlocks a powerful passive income"}</div>
                 </BuyRow>

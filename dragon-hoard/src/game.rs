@@ -411,19 +411,50 @@ impl GameState {
         } else {
             self.gold_per_sec
         };
+        
+        // --- Necromancy: undead workers ---
+        let undead_workers = if self.necromancy_level > 0 {
+            let level = self.necromancy_level as f64;
+
+            // base workers scale with level
+            let base_workers = level * 2.0;
+
+            // efficiency improves with level (more workers per mana)
+            let efficiency = 1.0 + 0.25 * level;
+
+            base_workers * efficiency
+        } else {
+            0.0
+        };
+        
+        let mana_cost_per_worker = 0.2;
+
+        let total_mana_cost = undead_workers * mana_cost_per_worker * dt_seconds;
+
+        let active_undead = if self.mana >= total_mana_cost {
+            self.subtract_track(GameTrack::Mana, total_mana_cost);
+            undead_workers
+        } else if self.mana > 0.0 {
+            // partial operation if low mana
+            let fraction = self.mana / total_mana_cost;
+            self.subtract_track(GameTrack::Mana, self.mana);
+            undead_workers * fraction
+        } else {
+            0.0
+        };
 
         // Base passive gold and kobold-produced gold
         self.adjust_track(GameTrack::Gold, effective_gold_per_sec * dt_seconds);
 
         // Alchemy increases miner output (+12% per level)
         let alchemy_mult = 1.0 + 0.12 * (self.alchemy_level as f64);
-        self.adjust_track(GameTrack::Gold, self.assigned_mining as f64 * 0.6 * effective_eff * alchemy_mult * dt_seconds);
+        self.adjust_track(GameTrack::Gold, (self.assigned_mining as f64 + active_undead) * 0.6 * effective_eff * alchemy_mult * dt_seconds);
 
         // Military kobolds provide minor gold when assigned
         self.adjust_track(GameTrack::Gold, self.assigned_military as f64 * 0.4 * effective_eff * dt_seconds);
 
         // Food production and upkeep
-        self.adjust_track(GameTrack::Food, self.assigned_farming as f64 * 0.35 * effective_eff * dt_seconds);
+        self.adjust_track(GameTrack::Food, (self.assigned_farming as f64 + active_undead * 0.5) * 0.35 * effective_eff* 0.35 * effective_eff * dt_seconds);
         let upkeep = self.kobold_upkeep() * dt_seconds;
         self.adjust_track(GameTrack::Food, -upkeep);
         if self.food > 99999.0 {
@@ -431,7 +462,7 @@ impl GameState {
         }
 
         // Digging / space progress
-        self.adjust_track(GameTrack::SpaceProgress, self.assigned_digging as f64 * 0.04 * effective_eff * dt_seconds);
+        self.adjust_track(GameTrack::SpaceProgress, (self.assigned_digging as f64 + active_undead * 0.5) * 0.04 * effective_eff * dt_seconds);
         let excess = (self.space as f64 - self.space_soft_cap).max(0.0);
         let multiplier = (-0.01 * excess).exp();
         let space_to_add = (self.space_progress * multiplier).floor() as u32;
@@ -440,22 +471,7 @@ impl GameState {
         self.storage_slots += space_to_add;
         self.update_gold_capacity();
 
-        // Necromancy: undead workers provide extra output at mana cost
-        if self.necromancy_level > 0 {
-            let undead_count = self.necromancy_level as f64;
-            let mana_cost = 0.4 * undead_count * dt_seconds; // mana/sec per undead
-            let production = 0.6 * undead_count * dt_seconds; // gold/sec equivalent
-            let mana_available = self.mana;
-            if mana_available >= mana_cost {
-                self.subtract_track(GameTrack::Mana, mana_cost);
-                self.adjust_track(GameTrack::Gold, production);
-            } else if mana_available > 0.0 {
-                // partial effect if low on mana
-                let frac = mana_available / mana_cost;
-                self.subtract_track(GameTrack::Mana, mana_available);
-                self.adjust_track(GameTrack::Gold, production * frac);
-            }
-        }
+
 
         // Summoning: more efficient helpers but require soldiers to maintain efficiency
         if self.summoning_level > 0 {

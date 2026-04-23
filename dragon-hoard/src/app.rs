@@ -34,7 +34,39 @@ pub fn app() -> Html {
         });
     }
 
+
     let callbacks = create_app_callbacks(game.clone(), toast.clone());
+
+    let interval_handle = use_mut_ref(|| Option::<Interval>::None);
+
+let onmousedown = {
+    let interval_handle = interval_handle.clone();
+    let on_click = callbacks.on_click_loot.clone();
+
+    Callback::from(move |_| {
+        if interval_handle.borrow().is_some() {
+            return;
+        }
+
+        let on_click = on_click.clone();
+
+        let handle = Interval::new(100, move || {
+            on_click.emit(MouseEvent::new("mousedown").unwrap());
+        });
+
+        *interval_handle.borrow_mut() = Some(handle);
+    })
+};
+
+    let stop = {
+        let interval_handle = interval_handle.clone();
+
+        Callback::from(move |_| {
+            // drop the interval to stop it
+            interval_handle.borrow_mut().take();
+        })
+    };
+
 
     let g = (*game).clone();
     let current_number_style = *number_style;
@@ -98,7 +130,14 @@ pub fn app() -> Html {
 
                 <main class="right-panel">
                     <Panel class={"toolbar".to_string()}>
+                        <div
+                            onmousedown={onmousedown.clone()}
+                            onmouseup={stop.clone()}
+                            onmouseleave={stop.clone()}
+                        >
                         <ActionButton label={format!("Loot (click) +{}", cost_label(ICON_GOLD, g.click_multiplier, current_number_style))} onclick={callbacks.on_click_loot.clone()} class={"big".to_string()} title={"Click to collect gold from your hoard. Power increases with click multiplier upgrades.".to_string()} />
+
+                        </div>
                         <div class="controls format-toggle">
                             { for [
                                 (NumberFormat::Standard, "Standard"),

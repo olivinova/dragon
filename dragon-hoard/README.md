@@ -24,6 +24,64 @@ trunk build --release
 # Output will be in `dist/` or as configured in `trunk.toml`.
 ```
 
+## Running tests
+
+The game includes a comprehensive integration test suite organized by domain. 
+
+```powershell
+cd dragon-hoard
+cargo test
+```
+
+### Test Organization
+
+Tests are split into focused integration test files under `tests/`:
+
+- **`tests/economy.rs`** — Resource generation, looting, training, and vault mechanics
+- **`tests/combat.rs`** — Town conquest, dungeon exploration, and military power calculations
+- **`tests/management.rs`** — Kobold recruitment, worker assignments, and space designation
+- **`tests/magic.rs`** — Magic learning, specializations, and enchantment crafting
+- **`tests/common.rs`** — Shared test helpers and game setup utilities
+
+### Running specific test suites
+
+```powershell
+# Run only economy tests
+cargo test --test economy
+
+# Run only combat tests
+cargo test --test combat
+
+# Run a specific test by name
+cargo test click_loot
+```
+
+### Code Coverage
+
+Generate code coverage reports using `cargo-tarpaulin`:
+
+```powershell
+# Install tarpaulin
+cargo install cargo-tarpaulin
+
+# Generate coverage (in dragon-hoard directory)
+cargo tarpaulin --out Html --timeout 300
+
+# View report in browser
+open tarpaulin-report.html
+```
+
+### CI/CD
+
+GitHub Actions automatically runs tests, coverage checks, and linting on every push to `main` or `master`:
+
+- **Tests** — Full integration and unit test suite
+- **Coverage** — Code coverage metrics uploaded to Codecov
+- **Fmt** — Rust formatting checks
+- **Clippy** — Linting for code quality and best practices
+
+Workflow file: `.github/workflows/tests.yml`
+
 ## Project structure
 
 - `src/lib.rs` — application entry point, renders the `App` component.

@@ -2,6 +2,8 @@ mod app;
 mod game;
 mod ui;
 
+pub use crate::game::{GameState, GameTrack};
+
 mod helpers {
     pub mod action_helpers;
     pub mod web_utils;

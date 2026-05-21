@@ -392,12 +392,16 @@ impl GameState {
 
     pub fn tick(&mut self, dt_seconds: f64) {
         // Effective kobold efficiency includes enchanting bonuses (small bonus to all output)
-        let effective_eff = self.kobold_efficiency * (1.0 + 0.04 * (self.enchanting_level as f64));
+        let enchanting_level = self.track_value(GameTrack::EnchantingLevel);
+        let kobold_efficiency = self.track_value(GameTrack::KoboldEfficiency);
+        let effective_eff = kobold_efficiency * (1.0 + 0.04 * enchanting_level);
 
         // Restoration reduces military upkeep requirements for conquered towns
-        let required_per_town = (1.0 - 0.15 * (self.restoration_level as f64)).max(0.0);
+        let restoration_level = self.track_value(GameTrack::RestorationLevel);
+        let required_per_town = (1.0 - 0.15 * restoration_level).max(0.0);
+        let assigned_military = self.track_value(GameTrack::AssignedMilitary) as f64;
         let military_per_town = if self.conquered_towns > 0 {
-            (self.assigned_military as f64) / (self.conquered_towns as f64)
+            assigned_military / (self.conquered_towns as f64)
         } else {
             1.0
         };
@@ -411,16 +415,17 @@ impl GameState {
         } else {
             self.gold_per_sec
         };
+
+        self.adjust_track(GameTrack::Gold, effective_gold_per_sec * dt_seconds);
         
         // --- Necromancy: undead workers ---
-        let undead_workers = if self.necromancy_level > 0 {
-            let level = self.necromancy_level as f64;
-
+        let necromancy_level = self.track_value(GameTrack::NecromancyLevel);
+        let undead_workers = if necromancy_level > 0.0 {
             // base workers scale with level
-            let base_workers = level * 2.0;
+            let base_workers = necromancy_level * 2.0;
 
             // efficiency improves with level (more workers per mana)
-            let efficiency = 1.0 + 0.25 * level;
+            let efficiency = 1.0 + 0.25 * necromancy_level;
 
             base_workers * efficiency
         } else {
@@ -428,41 +433,46 @@ impl GameState {
         };
         
         let mana_cost_per_worker = 0.2;
-
         let total_mana_cost = undead_workers * mana_cost_per_worker * dt_seconds;
+        let mana = self.track_value(GameTrack::Mana);
 
-        let active_undead = if self.mana >= total_mana_cost {
+        let active_undead = if mana >= total_mana_cost {
             self.subtract_track(GameTrack::Mana, total_mana_cost);
             undead_workers
-        } else if self.mana > 0.0 {
+        } else if mana > 0.0 {
             // partial operation if low mana
-            let fraction = self.mana / total_mana_cost;
-            self.subtract_track(GameTrack::Mana, self.mana);
+            let fraction = mana / total_mana_cost;
+            self.subtract_track(GameTrack::Mana, mana);
             undead_workers * fraction
         } else {
             0.0
         };
 
         // Base passive gold and kobold-produced gold
-        self.adjust_track(GameTrack::Gold, effective_gold_per_sec * dt_seconds);
+        let assigned_mining = self.track_value(GameTrack::AssignedMining) as f64;
+        self.adjust_track(GameTrack::Gold, (assigned_mining + active_undead) * dt_seconds);
 
         // Alchemy increases miner output (+12% per level)
-        let alchemy_mult = 1.0 + 0.12 * (self.alchemy_level as f64);
-        self.adjust_track(GameTrack::Gold, (self.assigned_mining as f64 + active_undead) * 0.6 * effective_eff * alchemy_mult * dt_seconds);
+        let alchemy_level = self.track_value(GameTrack::AlchemyLevel);
+        let alchemy_mult = 1.0 + 0.12 * alchemy_level;
+        self.adjust_track(GameTrack::Gold, (assigned_mining + active_undead) * 0.6 * effective_eff * alchemy_mult * dt_seconds);
 
         // Military kobolds provide minor gold when assigned
-        self.adjust_track(GameTrack::Gold, self.assigned_military as f64 * 0.4 * effective_eff * dt_seconds);
+        self.adjust_track(GameTrack::Gold, assigned_military * 0.4 * effective_eff * dt_seconds);
 
         // Food production and upkeep
-        self.adjust_track(GameTrack::Food, (self.assigned_farming as f64 + active_undead * 0.5) * 0.35 * effective_eff* 0.35 * effective_eff * dt_seconds);
+        let assigned_farming = self.track_value(GameTrack::AssignedFarming) as f64;
+        self.adjust_track(GameTrack::Food, (assigned_farming + active_undead * 0.5) * 0.35 * effective_eff * 0.35 * effective_eff * dt_seconds);
         let upkeep = self.kobold_upkeep() * dt_seconds;
         self.adjust_track(GameTrack::Food, -upkeep);
-        if self.food > 99999.0 {
-            self.food = 99999.0;
+        let food = self.track_value(GameTrack::Food);
+        if food > 99999.0 {
+            self.update_track(GameTrack::Food, 99999.0);
         }
 
         // Digging / space progress
-        self.adjust_track(GameTrack::SpaceProgress, (self.assigned_digging as f64 + active_undead * 0.5) * 0.04 * effective_eff * dt_seconds);
+        let assigned_digging = self.track_value(GameTrack::AssignedDigging) as f64;
+        self.adjust_track(GameTrack::SpaceProgress, (assigned_digging + active_undead * 0.5) * 0.04 * effective_eff * dt_seconds);
         let excess = (self.space as f64 - self.space_soft_cap).max(0.0);
         let multiplier = (-0.01 * excess).exp();
         let space_to_add = (self.space_progress * multiplier).floor() as u32;
@@ -474,13 +484,13 @@ impl GameState {
 
 
         // Summoning: more efficient helpers but require soldiers to maintain efficiency
-        if self.summoning_level > 0 {
-            let summon_count = self.summoning_level as f64;
-            let mana_cost = 0.5 * summon_count * dt_seconds;
+        let summoning_level = self.track_value(GameTrack::SummoningLevel);
+        if summoning_level > 0.0 {
+            let mana_cost = 0.5 * summoning_level * dt_seconds;
             // Efficiency scales with soldiers; bonus per soldier assigned
-            let soldier_factor = 1.0 + 0.08 * (self.assigned_military as f64);
-            let production = 0.9 * summon_count * soldier_factor * dt_seconds;
-            let mana_available = self.mana;
+            let soldier_factor = 1.0 + 0.08 * assigned_military;
+            let production = 0.9 * summoning_level * soldier_factor * dt_seconds;
+            let mana_available = self.track_value(GameTrack::Mana);
             if mana_available >= mana_cost {
                 self.subtract_track(GameTrack::Mana, mana_cost);
                 self.adjust_track(GameTrack::Gold, production);
@@ -492,8 +502,11 @@ impl GameState {
         }
 
         // mana regeneration
-        if self.mana < self.mana_capacity {
-            self.adjust_track(GameTrack::Mana, self.mana_regen_per_sec * dt_seconds);
+        let mana_regen = self.track_value(GameTrack::ManaRegenPerSec);
+        let mana_capacity = self.track_value(GameTrack::ManaCapacity);
+        let current_mana = self.track_value(GameTrack::Mana);
+        if current_mana < mana_capacity {
+            self.adjust_track(GameTrack::Mana, mana_regen * dt_seconds);
         }
     }
 
@@ -817,6 +830,153 @@ impl GameState {
             GameTrack::EnchantingLevel => GameTrackStats::new(Some(self.enchanting_level as f64), None, None, None),
             GameTrack::ClickMultiplier => GameTrackStats::new(Some(self.click_multiplier), None, None, None),
         }
+    }
+
+    pub fn current_necromancy_workers(&self) -> f64 {
+        let necromancy_level = self.track_value(GameTrack::NecromancyLevel);
+        if necromancy_level <= 0.0 {
+            return 0.0;
+        }
+        let base_workers = necromancy_level * 2.0;
+        let efficiency = 1.0 + 0.25 * necromancy_level;
+        let undead_workers = base_workers * efficiency;
+        let mana_cost = undead_workers * 0.2;
+        let mana = self.track_value(GameTrack::Mana);
+        if mana >= mana_cost {
+            undead_workers
+        } else if mana > 0.0 {
+            undead_workers * (mana / mana_cost)
+        } else {
+            0.0
+        }
+    }
+
+    pub fn current_summoning_rate(&self) -> f64 {
+        let summoning_level = self.track_value(GameTrack::SummoningLevel);
+        if summoning_level <= 0.0 {
+            return 0.0;
+        }
+        let assigned_military = self.track_value(GameTrack::AssignedMilitary);
+        let soldier_factor = 1.0 + 0.08 * assigned_military;
+        let production = 0.9 * summoning_level * soldier_factor;
+        let mana_cost = 0.5 * summoning_level;
+        let mana = self.track_value(GameTrack::Mana);
+        if mana >= mana_cost {
+            production
+        } else if mana > 0.0 {
+            production * (mana / mana_cost)
+        } else {
+            0.0
+        }
+    }
+
+    pub fn current_passive_gold_rate(&self) -> f64 {
+        let restoration_level = self.track_value(GameTrack::RestorationLevel);
+        let required_per_town = (1.0 - 0.15 * restoration_level).max(0.0);
+        let assigned_military = self.track_value(GameTrack::AssignedMilitary);
+        let military_per_town = if self.conquered_towns > 0 {
+            assigned_military / (self.conquered_towns as f64)
+        } else {
+            1.0
+        };
+        let town_income: f64 = self
+            .towns
+            .iter()
+            .filter(|t| t.conquered)
+            .map(|t| t.reward_gold_per_sec)
+            .sum();
+        if military_per_town < required_per_town {
+            self.gold_per_sec - town_income
+        } else {
+            self.gold_per_sec
+        }
+    }
+
+    pub fn gold_income_per_second(&self) -> f64 {
+        let enchanting_level = self.track_value(GameTrack::EnchantingLevel);
+        let kobold_efficiency = self.track_value(GameTrack::KoboldEfficiency);
+        let effective_eff = kobold_efficiency * (1.0 + 0.04 * enchanting_level);
+        let assigned_mining = self.track_value(GameTrack::AssignedMining);
+        let assigned_military = self.track_value(GameTrack::AssignedMilitary);
+        let active_undead = self.current_necromancy_workers();
+        let alchemy_mult = 1.0 + 0.12 * self.track_value(GameTrack::AlchemyLevel);
+
+        let mining_gold = (assigned_mining + active_undead) * (1.0 + 0.6 * effective_eff * alchemy_mult);
+        let military_gold = assigned_military * 0.4 * effective_eff;
+        mining_gold + military_gold + self.current_summoning_rate() + self.current_passive_gold_rate()
+    }
+
+    pub fn necromancy_next_level_effect(&self) -> String {
+        let current = self.current_necromancy_workers();
+        let next_level = self.necromancy_level + 1;
+        let base_workers = next_level as f64 * 2.0;
+        let efficiency = 1.0 + 0.25 * next_level as f64;
+        let next_workers = base_workers * efficiency;
+        let mana_cost = next_workers * 0.2;
+        if current > 0.0 {
+            format!("Next level raises undead worker output from {:.1} to {:.1} and costs {:.1} mana.", current, next_workers, mana_cost)
+        } else {
+            format!("Next level unlocks necromantic workers: {:.1} undead output at {:.1} mana cost.", next_workers, mana_cost)
+        }
+    }
+
+    pub fn alchemy_next_level_effect(&self) -> String {
+        let assigned_mining = self.track_value(GameTrack::AssignedMining);
+        let current_undead = self.current_necromancy_workers();
+        let enchanting_level = self.track_value(GameTrack::EnchantingLevel);
+        let effective_eff = self.track_value(GameTrack::KoboldEfficiency) * (1.0 + 0.04 * enchanting_level);
+        let current_mult = 1.0 + 0.12 * self.alchemy_level as f64;
+        let next_mult = 1.0 + 0.12 * (self.alchemy_level + 1) as f64;
+        let current_output = (assigned_mining + current_undead) * (1.0 + 0.6 * effective_eff * current_mult);
+        let next_output = (assigned_mining + current_undead) * (1.0 + 0.6 * effective_eff * next_mult);
+        if assigned_mining > 0.0 || current_undead > 0.0 {
+            format!("Next level increases mining output from {:.1}/s to {:.1}/s.", current_output, next_output)
+        } else {
+            format!("Next level grants +12% mining efficiency on future kobold output.")
+        }
+    }
+
+    pub fn restoration_next_level_effect(&self) -> String {
+        let current_req = (1.0 - 0.15 * self.restoration_level as f64).max(0.0);
+        let next_req = (1.0 - 0.15 * (self.restoration_level + 1) as f64).max(0.0);
+        format!("Next level lowers required military per conquered town from {:.0}% to {:.0}% of current strength.", current_req * 100.0, next_req * 100.0)
+    }
+
+    pub fn elemental_next_level_effect(&self) -> String {
+        let current_mult = 1.0 + 0.18 * self.elemental_level as f64;
+        let next_mult = 1.0 + 0.18 * (self.elemental_level + 1) as f64;
+        format!("Next level increases combat power multiplier from {:.2}× to {:.2}×.", current_mult, next_mult)
+    }
+
+    pub fn summoning_next_level_effect(&self) -> String {
+        let assigned_military = self.track_value(GameTrack::AssignedMilitary);
+        let soldier_factor = 1.0 + 0.08 * assigned_military;
+        let current_production = 0.9 * self.summoning_level as f64 * soldier_factor;
+        let next_production = 0.9 * (self.summoning_level + 1) as f64 * soldier_factor;
+        let current_mana = self.track_value(GameTrack::Mana);
+        let current_cost = 0.5 * self.summoning_level as f64;
+        let next_cost = 0.5 * (self.summoning_level + 1) as f64;
+        let current_actual = if current_mana >= current_cost {
+            current_production
+        } else if current_mana > 0.0 {
+            current_production * (current_mana / current_cost)
+        } else {
+            0.0
+        };
+        let next_actual = if current_mana >= next_cost {
+            next_production
+        } else if current_mana > 0.0 {
+            next_production * (current_mana / next_cost)
+        } else {
+            0.0
+        };
+        format!("Next level raises summoned helper output from {:.1}/s to {:.1}/s and increases mana cost from {:.1} to {:.1}.", current_actual, next_actual, current_cost, next_cost)
+    }
+
+    pub fn enchanting_next_level_effect(&self) -> String {
+        let current_eff = self.track_value(GameTrack::KoboldEfficiency) * (1.0 + 0.04 * self.enchanting_level as f64);
+        let next_eff = self.track_value(GameTrack::KoboldEfficiency) * (1.0 + 0.04 * (self.enchanting_level + 1) as f64);
+        format!("Next level increases kobold efficiency multiplier from {:.2}× to {:.2}× for mining and military output.", current_eff, next_eff)
     }
 
     pub fn track_property_value(

@@ -207,13 +207,21 @@ pub struct StatRowProps {
     pub hint: String,
     #[prop_or_default]
     pub hint_class: String,
+    #[prop_or_default]
+    pub tooltip: String,
 }
 
 #[function_component(StatRow)]
 pub fn stat_row(props: &StatRowProps) -> Html {
+    let title = if props.tooltip.is_empty() {
+        format!("{}: {}", props.label, props.value)
+    } else {
+        props.tooltip.clone()
+    };
+
     html! {
         <div class={classes!("stat-row", if !props.hint_class.is_empty() { Some(props.hint_class.clone()) } else { None })}>
-            <div title={format!("{}: {}", props.label, props.value)}>
+            <div title={title}>
                 <div class="stat-label-top">
                     if let Some(icon) = &props.icon {
                         <span class="stat-icon">{ icon }</span>
@@ -238,6 +246,8 @@ pub struct ResourceStatRowProps {
     pub hint: String,
     #[prop_or_default]
     pub hint_class: String,
+    #[prop_or_default]
+    pub tooltip: String,
 }
 
 #[function_component(ResourceStatRow)]
@@ -249,6 +259,7 @@ pub fn resource_stat_row(props: &ResourceStatRowProps) -> Html {
             icon={Some(props.icon.clone())}
             hint={props.hint.clone()}
             hint_class={props.hint_class.clone()}
+            tooltip={props.tooltip.clone()}
         />
     }
 }

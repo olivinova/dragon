@@ -46,7 +46,7 @@ pub fn enchantments_tab(props: &EnchantmentsTabProps) -> Html {
                             label={format!("Study Necromancy (cost {}, {} researchers)", cost_label(ICON_GOLD, g.specialization_cost(g.necromancy_level), props.number_style), g.specialization_research_cost())}
                             onclick={props.on_learn_necromancy.clone()}
                             disabled={g.gold < g.specialization_cost(g.necromancy_level) || g.assigned_research < g.specialization_research_cost()}
-                            title={format!("Unlock necromantic magic. Requires {} research kobolds to progress. Current total levels: {}", g.specialization_research_cost(), g.total_specialization_levels())}
+                            title={g.necromancy_next_level_effect()}
                         />
                         <div class="muted">{ format!("Level: {}", g.necromancy_level) }</div>
                     </BuyRow>
@@ -55,7 +55,7 @@ pub fn enchantments_tab(props: &EnchantmentsTabProps) -> Html {
                             label={format!("Study Alchemy (cost {}, {} researchers)", cost_label(ICON_GOLD, g.specialization_cost(g.alchemy_level), props.number_style), g.specialization_research_cost())}
                             onclick={props.on_learn_alchemy.clone()}
                             disabled={g.gold < g.specialization_cost(g.alchemy_level) || g.assigned_research < g.specialization_research_cost()}
-                            title={format!("Master alchemical arts. Requires {} research kobolds to progress. Current total levels: {}", g.specialization_research_cost(), g.total_specialization_levels())}
+                            title={g.alchemy_next_level_effect()}
                         />
                         <div class="muted">{ format!("Level: {}", g.alchemy_level) }</div>
                     </BuyRow>
@@ -64,7 +64,7 @@ pub fn enchantments_tab(props: &EnchantmentsTabProps) -> Html {
                             label={format!("Study Restoration (cost {}, {} researchers)", cost_label(ICON_GOLD, g.specialization_cost(g.restoration_level), props.number_style), g.specialization_research_cost())}
                             onclick={props.on_learn_restoration.clone()}
                             disabled={g.gold < g.specialization_cost(g.restoration_level) || g.assigned_research < g.specialization_research_cost()}
-                            title={format!("Learn restorative magic. Requires {} research kobolds to progress. Current total levels: {}", g.specialization_research_cost(), g.total_specialization_levels())}
+                            title={g.restoration_next_level_effect()}
                         />
                         <div class="muted">{ format!("Level: {}", g.restoration_level) }</div>
                     </BuyRow>
@@ -73,7 +73,7 @@ pub fn enchantments_tab(props: &EnchantmentsTabProps) -> Html {
                             label={format!("Study Elemental (cost {}, {} researchers)", cost_label(ICON_GOLD, g.specialization_cost(g.elemental_level), props.number_style), g.specialization_research_cost())}
                             onclick={props.on_learn_elemental.clone()}
                             disabled={g.gold < g.specialization_cost(g.elemental_level) || g.assigned_research < g.specialization_research_cost()}
-                            title={format!("Harness elemental forces. Requires {} research kobolds to progress. Current total levels: {}", g.specialization_research_cost(), g.total_specialization_levels())}
+                            title={g.elemental_next_level_effect()}
                         />
                         <div class="muted">{ format!("Level: {}", g.elemental_level) }</div>
                     </BuyRow>
@@ -82,7 +82,7 @@ pub fn enchantments_tab(props: &EnchantmentsTabProps) -> Html {
                             label={format!("Study Summoning (cost {}, {} researchers)", cost_label(ICON_GOLD, g.specialization_cost(g.summoning_level), props.number_style), g.specialization_research_cost())}
                             onclick={props.on_learn_summoning.clone()}
                             disabled={g.gold < g.specialization_cost(g.summoning_level) || g.assigned_research < g.specialization_research_cost()}
-                            title={format!("Master summoning magic. Requires {} research kobolds to progress. Current total levels: {}", g.specialization_research_cost(), g.total_specialization_levels())}
+                            title={g.summoning_next_level_effect()}
                         />
                         <div class="muted">{ format!("Level: {}", g.summoning_level) }</div>
                     </BuyRow>
@@ -91,7 +91,7 @@ pub fn enchantments_tab(props: &EnchantmentsTabProps) -> Html {
                             label={format!("Study Enchanting (cost {}, {} researchers)", cost_label(ICON_GOLD, g.specialization_cost(g.enchanting_level), props.number_style), g.specialization_research_cost())}
                             onclick={props.on_learn_enchanting.clone()}
                             disabled={g.gold < g.specialization_cost(g.enchanting_level) || g.assigned_research < g.specialization_research_cost()}
-                            title={format!("Deepen enchantment crafting knowledge. Requires {} research kobolds to progress. Current total levels: {}", g.specialization_research_cost(), g.total_specialization_levels())}
+                            title={g.enchanting_next_level_effect()}
                         />
                         <div class="muted">{ format!("Level: {}", g.enchanting_level) }</div>
                     </BuyRow>

@@ -71,9 +71,15 @@ let onmousedown = {
     let g = (*game).clone();
     let current_number_style = *number_style;
 
-    let gold_rate = g.gold_per_sec + g.assigned_mining as f64 * 0.6 * g.kobold_efficiency;
+    let gold_rate = g.gold_income_per_second();
     let food_rate = g.assigned_farming as f64 * 0.35 * g.kobold_efficiency - g.kobold_upkeep();
     let mana_rate = if g.mana < g.mana_capacity { g.mana_regen_per_sec } else { 0.0 };
+    let effective_efficiency = g.kobold_efficiency * (1.0 + 0.04 * g.enchanting_level as f64);
+    let alchemy_bonus = 1.0 + 0.12 * g.alchemy_level as f64;
+    let restoration_requirement = (1.0 - 0.15 * g.restoration_level as f64).max(0.0);
+    let elemental_multiplier = 1.0 + 0.18 * g.elemental_level as f64;
+    let necromancy_output = g.current_necromancy_workers();
+    let summoning_output = g.current_summoning_rate();
 
     html! {
         <div class="container">
@@ -118,12 +124,61 @@ let onmousedown = {
                             />
                         </Panel>
                     </details>
+                    
                     <details open={true} class="resource-section">
                         <summary class="resource-summary">{"Kobolds"}</summary>
                         <Panel class={"resource-panel".to_string()}>
                             <StatRow label={"Population".to_string()} value={format!("{}/{}", g.kobolds, g.housing_slots)} />
                             <StatRow label={"Free".to_string()} value={format!("{}", g.free_kobolds())} />
                             <StatRow label={"Upkeep".to_string()} value={format!("{:.1}/s", g.kobold_upkeep())} />
+                        </Panel>
+                    </details>
+                    
+                    <details open={true} class="resource-section">
+                        <summary class="resource-summary">{"Skills"}</summary>
+                        <Panel class={"resource-panel".to_string()}>
+                            <StatRow
+                                label={"Magic Level".to_string()}
+                                value={format!("{}", g.magic_level)}
+                                hint={"Unlocks specializations and mana upgrades".to_string()}
+                                tooltip={format!("Magic level {} increases mana capacity, mana regen, and unlocks spell specializations.", g.magic_level)}
+                            />
+                            <StatRow
+                                label={"Kobold Efficiency".to_string()}
+                                value={format!("{:.2}×", effective_efficiency)}
+                                hint={format!("+{:.0}% base output", (effective_efficiency - 1.0) * 100.0)}
+                                tooltip={format!("Current kobold output multiplier from base efficiency and Enchanting: {:.2}×.", effective_efficiency)}
+                            />
+                            <StatRow
+                                label={"Necromancy".to_string()}
+                                value={format!("{:.1}/s", necromancy_output)}
+                                hint={"Undead worker output".to_string()}
+                                tooltip={format!("Necromancy produces {:.1} undead worker output per second based on current mana and level.", necromancy_output)}
+                            />
+                            <StatRow
+                                label={"Alchemy".to_string()}
+                                value={format!("+{:.0}%", (alchemy_bonus - 1.0) * 100.0)}
+                                hint={"Mining bonus".to_string()}
+                                tooltip={format!("Alchemy boosts mining output by {:.0}% with current specialization level.", (alchemy_bonus - 1.0) * 100.0)}
+                            />
+                            <StatRow
+                                label={"Restoration".to_string()}
+                                value={format!("{:.0}%", restoration_requirement * 100.0)}
+                                hint={"Town maintenance threshold".to_string()}
+                                tooltip={format!("Restoration lowers the required military maintenance per conquered town to {:.0}% of full strength.", restoration_requirement * 100.0)}
+                            />
+                            <StatRow
+                                label={"Elemental".to_string()}
+                                value={format!("{:.2}×", elemental_multiplier)}
+                                hint={"Combat power".to_string()}
+                                tooltip={format!("Elemental specialization multiplies combat power by {:.2}×.", elemental_multiplier)}
+                            />
+                            <StatRow
+                                label={"Summoning".to_string()}
+                                value={format!("{:.1}/s", summoning_output)}
+                                hint={"Summoned helper output".to_string()}
+                                tooltip={format!("Summoning produces {:.1} helper output per second based on current level and mana.", summoning_output)}
+                            />
                         </Panel>
                     </details>
                 </aside>
